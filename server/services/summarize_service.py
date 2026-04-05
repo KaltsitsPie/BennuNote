@@ -9,7 +9,6 @@ Supports 5 providers (pick one):
 """
 
 import time
-from config import load_config
 
 SYSTEM_PROMPT = (
     "你是一个视频内容分析助手。请对以下视频字幕进行结构化总结，包含要点提炼和关键信息。"
@@ -19,9 +18,29 @@ DEFAULT_MODELS = {
     "claude_setup_token": "claude-haiku-4-5-20251001",
     "claude_api": "claude-haiku-4-5-20251001",
     "openai": "gpt-4o-mini",
-    "gemini": "gemini-2.0-flash",
+    "gemini": "gemini-2.5-flash",
     "deepseek": "deepseek-chat",
 }
+
+
+def summarize_with_params(
+    provider: str, api_key: str, title: str, text: str,
+    model: str | None = None, max_retries: int = 3
+) -> str:
+    """Called by the router with explicit provider/key/model from the request."""
+    m = model or DEFAULT_MODELS.get(provider, "")
+    if provider == "claude_setup_token":
+        return _summarize_claude_setup_token(api_key, m, title, text, max_retries)
+    elif provider == "claude_api":
+        return _summarize_claude_api(api_key, m, title, text, max_retries)
+    elif provider == "openai":
+        return _summarize_openai(api_key, m, title, text, max_retries)
+    elif provider == "gemini":
+        return _summarize_gemini(api_key, m, title, text, max_retries)
+    elif provider == "deepseek":
+        return _summarize_deepseek(api_key, m, title, text, max_retries)
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
 
 
 def get_active_provider() -> tuple[str, dict]:
