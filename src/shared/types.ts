@@ -11,7 +11,7 @@ export interface VideoInfo {
   partTitle?: string;
 }
 
-export type SubtitleSource = 'ai' | 'cc' | 'whisper';
+export type SubtitleSource = 'ai' | 'cc' | 'whisper' | 'bcut_asr';
 
 export interface SubtitleResult {
   source: SubtitleSource;
@@ -29,20 +29,14 @@ export interface BennuNoteConfig {
   feishuMode: 'append' | 'new';
   feishuDocToken: string;
   feishuFolderToken: string;
-  feishuAppId: string;
-  feishuAppSecret: string;
   bilibiliCookie: string;
   whisperModelSize: 'tiny' | 'base' | 'small' | 'medium' | 'large';
-  claudeSetupToken: string;
 }
 
 export const DEFAULT_CONFIG: BennuNoteConfig = {
   feishuMode: 'new',
   feishuDocToken: '',
   feishuFolderToken: '',
-  feishuAppId: '',
-  feishuAppSecret: '',
   bilibiliCookie: '',
   whisperModelSize: 'small',
-  claudeSetupToken: '',
 };

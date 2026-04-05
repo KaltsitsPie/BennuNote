@@ -66,17 +66,179 @@
     }
     .conditional { display: none; }
     .conditional.visible { display: block; }
+
+    /* Server secrets */
+    .server-status {
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .server-status.online { background: #e8f5e9; color: #2e7d32; }
+    .server-status.offline { background: #fbe9e7; color: #c62828; }
+    .server-status.loading { background: #fff3e0; color: #e65100; }
+
+    .secret-row {
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .secret-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .secret-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      flex: 1;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ccc;
+      flex-shrink: 0;
+    }
+    .status-dot.set { background: #4caf50; }
+    .secret-preview {
+      font-size: 12px;
+      color: #999;
+      font-family: monospace;
+      margin-right: 8px;
+    }
+    .btn-sm {
+      padding: 4px 10px;
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      background: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      color: #555;
+    }
+    .btn-sm:hover { background: #f5f5f5; }
+    .btn-sm.danger { color: #c62828; border-color: #ef9a9a; }
+    .btn-sm.danger:hover { background: #fbe9e7; }
+
+    .secret-edit {
+      display: none;
+      margin-top: 8px;
+    }
+    .secret-edit.visible { display: flex; gap: 6px; }
+    .secret-edit input {
+      flex: 1;
+      margin-bottom: 0;
+      font-size: 12px;
+      padding: 6px 8px;
+    }
+    .secret-edit .btn-sm { flex-shrink: 0; align-self: center; }
   </style>
 </head>
 <body>
   <h1>BennuNote Settings</h1>
 
   <div class="section">
+    <h2>Server Secrets</h2>
+    <div id="server-status" class="server-status loading">Checking server...</div>
+
+    <div class="secret-row" data-key="feishu_app_id">
+      <div class="secret-header">
+        <span class="status-dot"></span>
+        <span class="secret-label">Feishu App ID</span>
+        <span class="secret-preview"></span>
+        <button class="btn-sm btn-update">Update</button>
+        <button class="btn-sm danger btn-clear">Clear</button>
+      </div>
+      <div class="secret-edit">
+        <input type="text" placeholder="cli_xxxxxxxx">
+        <button class="btn-sm btn-save">Save</button>
+        <button class="btn-sm btn-cancel">Cancel</button>
+      </div>
+    </div>
+
+    <div class="secret-row" data-key="feishu_app_secret">
+      <div class="secret-header">
+        <span class="status-dot"></span>
+        <span class="secret-label">Feishu App Secret</span>
+        <span class="secret-preview"></span>
+        <button class="btn-sm btn-update">Update</button>
+        <button class="btn-sm danger btn-clear">Clear</button>
+      </div>
+      <div class="secret-edit">
+        <input type="password" placeholder="Your App Secret">
+        <button class="btn-sm btn-save">Save</button>
+        <button class="btn-sm btn-cancel">Cancel</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="section">
+    <h2>AI Provider (pick one)</h2>
+    <div style="font-size:12px;color:#999;margin-bottom:8px">Configure at <a href="http://localhost:2185/setup" target="_blank">localhost:2185/setup</a> for full options</div>
+    <div class="secret-row" data-key="claude_setup_token">
+      <div class="secret-header">
+        <span class="status-dot"></span>
+        <span class="secret-label">Claude Setup Token</span>
+        <span class="secret-preview"></span>
+        <button class="btn-sm btn-update">Update</button>
+        <button class="btn-sm danger btn-clear">Clear</button>
+      </div>
+      <div class="secret-edit">
+        <input type="password" placeholder="sk-ant-oat01-...">
+        <button class="btn-sm btn-save">Save</button>
+        <button class="btn-sm btn-cancel">Cancel</button>
+      </div>
+    </div>
+    <div class="secret-row" data-key="openai_api_key">
+      <div class="secret-header">
+        <span class="status-dot"></span>
+        <span class="secret-label">OpenAI API Key</span>
+        <span class="secret-preview"></span>
+        <button class="btn-sm btn-update">Update</button>
+        <button class="btn-sm danger btn-clear">Clear</button>
+      </div>
+      <div class="secret-edit">
+        <input type="password" placeholder="sk-...">
+        <button class="btn-sm btn-save">Save</button>
+        <button class="btn-sm btn-cancel">Cancel</button>
+      </div>
+    </div>
+    <div class="secret-row" data-key="gemini_api_key">
+      <div class="secret-header">
+        <span class="status-dot"></span>
+        <span class="secret-label">Gemini API Key</span>
+        <span class="secret-preview"></span>
+        <button class="btn-sm btn-update">Update</button>
+        <button class="btn-sm danger btn-clear">Clear</button>
+      </div>
+      <div class="secret-edit">
+        <input type="password" placeholder="AIza...">
+        <button class="btn-sm btn-save">Save</button>
+        <button class="btn-sm btn-cancel">Cancel</button>
+      </div>
+    </div>
+    <div class="secret-row" data-key="deepseek_api_key">
+      <div class="secret-header">
+        <span class="status-dot"></span>
+        <span class="secret-label">DeepSeek API Key</span>
+        <span class="secret-preview"></span>
+        <button class="btn-sm btn-update">Update</button>
+        <button class="btn-sm danger btn-clear">Clear</button>
+      </div>
+      <div class="secret-edit">
+        <input type="password" placeholder="sk-...">
+        <button class="btn-sm btn-save">Save</button>
+        <button class="btn-sm btn-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
     <h2>Feishu / Lark</h2>
-    <label for="feishu-app-id">App ID</label>
-    <input type="text" id="feishu-app-id" placeholder="cli_xxxxxxxx">
-    <label for="feishu-app-secret">App Secret</label>
-    <input type="password" id="feishu-app-secret" placeholder="Your App Secret">
     <label for="feishu-mode">Write Mode</label>
     <select id="feishu-mode">
       <option value="new">New document each time</option>
@@ -99,15 +261,6 @@
   </div>
 
   <div class="section">
-    <h2>Claude AI</h2>
-    <label for="claude-setup-token">Setup Token</label>
-    <input type="password" id="claude-setup-token" placeholder="sk-ant-oat01-...">
-    <div style="font-size:11px;color:#999;margin-top:-8px;margin-bottom:12px">
-      From Claude subscription settings. Used for subtitle summarization.
-    </div>
-  </div>
-
-  <div class="section">
     <h2>Whisper Model</h2>
     <label for="whisper-model">Model Size (for backend transcription)</label>
     <select id="whisper-model">
@@ -119,7 +272,7 @@
     </select>
   </div>
 
-  <button class="btn" id="save-btn">Save</button>
+  <button class="btn" id="save-btn">Save Local Settings</button>
   <div class="toast" id="toast">Settings saved!</div>
 
   <script type="module" src="options.ts"></script>

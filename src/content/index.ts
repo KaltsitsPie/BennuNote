@@ -1,7 +1,8 @@
 import { extractVideoInfo, fetchSubtitles, loadTrack, setLogFn } from './bilibili-api';
 import { SubtitlePanel } from './subtitle-panel';
 import type { Message } from '../shared/messages';
-import type { SubtitleItem } from '../shared/types';
+import type { BennuNoteConfig, SubtitleItem } from '../shared/types';
+import { DEFAULT_CONFIG } from '../shared/types';
 
 let panel: SubtitlePanel | null = null;
 let currentVideoInfo: { bvid: string; cid: number; title: string } | null = null;
@@ -15,23 +16,24 @@ function getPanel(): SubtitlePanel {
     setLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
 
     panel.setSyncHandler(() => {
-      if (currentVideoInfo && panel) {
-        panel.setFeishuSyncing(true);
-        panel.log('Syncing subtitles to Feishu...', 'step');
+      if (!currentVideoInfo || !panel) return;
+      chrome.storage.local.get('bennunote_config', (data) => {
+        const config: BennuNoteConfig = { ...DEFAULT_CONFIG, ...(data.bennunote_config as Partial<BennuNoteConfig> | undefined) };
+        panel!.setFeishuSyncing(true);
+        panel!.log('Syncing subtitles to Feishu...', 'step');
         const text = currentItems.map(i => i.content).join('\n');
-        const title = `${currentVideoInfo.title} - ${new Date().toLocaleDateString('zh-CN')}`;
+        const title = `${currentVideoInfo!.title} - ${new Date().toLocaleDateString('zh-CN')}`;
         chrome.runtime.sendMessage({ type: 'WRITE_FEISHU', text, title });
-      }
+      });
     });
 
     panel.setSummarizeHandler(() => {
-      if (currentVideoInfo && currentItems.length > 0 && panel) {
-        panel.setSummarizing(true);
-        panel.log('Generating AI summary...', 'step');
-        const text = currentItems.map(i => i.content).join('\n');
-        const title = currentVideoInfo.title;
-        chrome.runtime.sendMessage({ type: 'SUMMARIZE', text, title });
-      }
+      if (!currentVideoInfo || currentItems.length === 0 || !panel) return;
+      panel!.setSummarizing(true);
+      panel!.log('Generating AI summary...', 'step');
+      const text = currentItems.map(i => i.content).join('\n');
+      const title = currentVideoInfo!.title;
+      chrome.runtime.sendMessage({ type: 'SUMMARIZE', text, title });
     });
   }
   return panel;
@@ -88,25 +90,29 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
   return false;
 });
 
+async function checkBackendHealth(p: SubtitlePanel): Promise<boolean> {
+  try {
+    const resp = await fetch('http://localhost:2185/health', { signal: AbortSignal.timeout(2000) });
+    const data = await resp.json();
+    const online = data.status === 'ok';
+    backendOnline = online;
+    p.setServiceStatus(online);
+    return online;
+  } catch {
+    backendOnline = false;
+    p.setServiceStatus(false);
+    return false;
+  }
+}
+
 async function handleExtract(language: string) {
   const p = getPanel();
   p.show();
   p.log('--- New extraction started ---', 'step');
   p.log(`Target language: ${language}`, 'info');
 
-  // Check backend health
-  backendOnline = false;
-  try {
-    p.log('Checking backend service...', 'info');
-    const resp = await fetch('http://localhost:2185/health', { signal: AbortSignal.timeout(2000) });
-    const data = await resp.json();
-    backendOnline = data.status === 'ok';
-    p.setServiceStatus(backendOnline);
-    p.log(`Backend service: ${backendOnline ? 'online' : 'offline'}`, backendOnline ? 'success' : 'warn');
-  } catch {
-    p.setServiceStatus(false);
-    p.log('Backend service: offline (cannot reach localhost:2185)', 'warn');
-  }
+  // Check backend health in background (non-blocking, just updates status dot)
+  checkBackendHealth(p);
 
   // Step 1: Extract video info
   p.log('Step 1: Extracting video info...', 'step');
@@ -190,11 +196,15 @@ async function handleExtract(language: string) {
   if (stage1Failed) {
     p.log('Stage 1 failed. Falling back to backend service...', 'step');
 
-    if (!backendOnline) {
+    // Now we actually need the backend — check if it's online
+    p.log('Checking backend service...', 'info');
+    const online = await checkBackendHealth(p);
+    if (!online) {
       p.log('Backend service is offline — cannot fallback to transcription.', 'error');
-      p.log('Please start the backend (cd server && python main.py) and try again.', 'warn');
+      p.log('Start the backend: ./start-server.sh', 'warn');
       return;
     }
+    p.log('Backend service: online', 'success');
 
     p.log(`Step 3: Requesting backend transcription for ${videoInfo.bvid}...`, 'step');
     p.log('Backend will try: Bcut ASR → Whisper (this may take a while)', 'info');

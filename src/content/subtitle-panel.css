@@ -366,3 +366,343 @@
   color: #999;
   cursor: not-allowed;
 }
+
+/* Token setup form */
+.bennu-summary-setup {
+  padding: 16px;
+}
+
+.bennu-setup-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.bennu-setup-desc {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.bennu-setup-link {
+  color: #00a1d6;
+  text-decoration: none;
+}
+
+.bennu-setup-link:hover {
+  text-decoration: underline;
+}
+
+.bennu-setup-cmd {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 13px;
+  user-select: all;
+}
+
+.bennu-setup-cmd code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+.bennu-setup-desc code {
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.bennu-setup-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: monospace;
+  margin-bottom: 8px;
+  background: #fff;
+  color: #333;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.bennu-setup-input:focus {
+  border-color: #00a1d6;
+  box-shadow: 0 0 0 2px rgba(0,161,214,0.15);
+}
+
+.bennu-setup-error {
+  font-size: 12px;
+  color: #f44336;
+  margin-bottom: 8px;
+}
+
+.bennu-setup-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bennu-setup-actions .bennu-btn {
+  flex: 1;
+  text-align: center;
+  padding: 7px 0;
+  font-size: 13px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.bennu-setup-actions .bennu-btn[data-action="save-token"] {
+  background: #00a1d6;
+  color: #fff;
+  border-color: #00a1d6;
+}
+
+.bennu-setup-actions .bennu-btn[data-action="save-token"]:hover {
+  background: #0090c0;
+}
+
+/* Feishu setup form */
+.bennu-feishu-setup {
+  padding: 16px;
+  border-top: 1px solid #eee;
+  background: #f8f9fa;
+  border-radius: 0 0 12px 12px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.bennu-feishu-setup .bennu-setup-input {
+  margin-bottom: 10px;
+}
+
+.bennu-setup-field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.bennu-setup-optional {
+  font-weight: 400;
+  color: #999;
+}
+
+.bennu-feishu-save-btn {
+  background: #3370ff !important;
+  color: #fff !important;
+  border-color: #3370ff !important;
+}
+
+.bennu-feishu-save-btn:hover {
+  background: #2860e0 !important;
+}
+
+/* Settings tab */
+.bennu-settings {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.bennu-settings-section {
+  margin-bottom: 16px;
+}
+
+.bennu-settings-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.bennu-server-status {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.bennu-server-online {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.bennu-server-offline {
+  background: #fbe9e7;
+  color: #c62828;
+}
+
+.bennu-secret-row {
+  padding: 8px 10px;
+  background: #f8f9fa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.bennu-secret-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bennu-secret-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ccc;
+  flex-shrink: 0;
+}
+.bennu-secret-dot.set {
+  background: #4caf50;
+}
+
+.bennu-secret-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+  flex: 1;
+}
+
+.bennu-secret-preview {
+  font-size: 11px;
+  color: #999;
+  font-family: monospace;
+}
+
+.bennu-secret-update,
+.bennu-secret-clear {
+  font-size: 11px !important;
+  padding: 2px 6px !important;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  background: #fff;
+  color: #666;
+}
+.bennu-secret-clear {
+  color: #c62828;
+  border-color: #ef9a9a;
+}
+.bennu-secret-update:hover { background: #f0f0f0; }
+.bennu-secret-clear:hover { background: #fbe9e7; }
+
+.bennu-secret-edit {
+  display: none;
+  margin-top: 6px;
+  gap: 6px;
+  align-items: center;
+}
+.bennu-secret-edit input {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+  outline: none;
+  background: #fff;
+  color: #333;
+  box-sizing: border-box;
+}
+.bennu-secret-edit input:focus {
+  border-color: #00a1d6;
+}
+.bennu-secret-save {
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  background: #00a1d6 !important;
+  color: #fff !important;
+  border: none;
+  border-radius: 4px;
+}
+
+.bennu-settings-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #888;
+  margin-bottom: 3px;
+  margin-top: 8px;
+}
+
+.bennu-settings-input,
+.bennu-settings-select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+  color: #333;
+  outline: none;
+  box-sizing: border-box;
+}
+.bennu-settings-input:focus,
+.bennu-settings-select:focus {
+  border-color: #00a1d6;
+}
+
+.bennu-settings-conditional {
+  display: none;
+}
+
+.bennu-settings-save {
+  margin-top: 10px;
+  width: 100%;
+  padding: 7px 0;
+  text-align: center;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #00a1d6 !important;
+  color: #fff !important;
+}
+.bennu-settings-save:hover {
+  background: #0090c0 !important;
+}
+
+.bennu-settings-toast {
+  text-align: center;
+  font-size: 12px;
+  color: #4caf50;
+  margin-top: 6px;
+}
+
+/* Provider tabs */
+.bennu-provider-tabs {
+  display: flex;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.bennu-provider-tab {
+  flex: 1;
+  padding: 4px 2px;
+  text-align: center;
+  font-size: 10px !important;
+  color: #888;
+  border: none;
+  border-right: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  border-radius: 0;
+}
+.bennu-provider-tab:last-child { border-right: none; }
+.bennu-provider-tab:hover { background: #f0f7ff; }
+.bennu-provider-tab.active {
+  background: #e8f4ff;
+  color: #00a1d6;
+  font-weight: 500;
+}
+.bennu-provider-panel { display: none; }
+.bennu-provider-panel.active { display: block; }

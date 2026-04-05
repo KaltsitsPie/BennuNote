@@ -59,7 +59,7 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
             chrome.tabs.sendMessage(tabId, {
               type: 'TRANSCRIPT_RESULT',
               result: {
-                source: data.source === 'bcut_asr' ? 'ai' : 'whisper',
+                source: data.source,
                 items: data.items,
                 language: msg.language,
               },
@@ -113,8 +113,6 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
             mode: config.feishuMode || 'new',
             doc_token: config.feishuDocToken || '',
             folder_token: config.feishuFolderToken || '',
-            app_id: config.feishuAppId || '',
-            app_secret: config.feishuAppSecret || '',
           }),
         });
 
@@ -167,7 +165,6 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
           body: JSON.stringify({
             text: msg.text,
             title: msg.title,
-            setup_token: config.claudeSetupToken || '',
           }),
         });
 

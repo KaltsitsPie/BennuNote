@@ -22,16 +22,12 @@ async function init() {
     return;
   }
 
-  // Check backend health
+  // Check backend health (informational only — Stage 1 doesn't need it)
   const healthy = await checkHealth();
-  if (healthy) {
-    statusDot.style.background = '#4caf50';
-    statusText.textContent = 'Service online';
-  } else {
-    statusDot.style.background = '#f44336';
-    statusText.textContent = 'Service offline — please start the backend';
-    btn.disabled = true;
-  }
+  statusDot.style.background = healthy ? '#4caf50' : '#f44336';
+  statusText.textContent = healthy
+    ? 'Service online'
+    : 'Backend offline — transcription fallback unavailable';
 }
 
 init();
