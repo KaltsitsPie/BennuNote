@@ -8,8 +8,13 @@
     "*://*.bilibili.com/*",
     "*://*.hdslb.com/*",
     "*://*.bilivideo.com/*",
-    "*://*.akamaized.net/*"
+    "*://*.akamaized.net/*",
+    "http://localhost:2185/*"
   ],
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
   "action": {
     "default_popup": "src/popup/popup.html",
     "default_icon": {
