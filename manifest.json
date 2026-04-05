@@ -7,7 +7,12 @@
   "host_permissions": [
     "*://*.bilibili.com/*",
     "*://*.hdslb.com/*",
-    "http://localhost:2185/*"
+    "http://localhost:2185/*",
+    "https://open.feishu.cn/*",
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.deepseek.com/*"
   ],
   "options_ui": {
     "page": "src/options/options.html",
