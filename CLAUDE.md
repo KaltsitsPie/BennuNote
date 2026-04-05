@@ -20,26 +20,27 @@ Content script changes require reloading the Bilibili tab as well.
 ```
 Popup (src/popup/)           → trigger button, language select, sends EXTRACT_SUBTITLES
   ↓
-Background (src/background.ts) → message router, server-or-direct fallback
+Background (src/background.ts) → message router, server-or-direct fallback (AI only)
   ├→ Content Script (src/content/) → runs on bilibili.com/video/*
   │   ├ bilibili-api.ts  → video info extraction, subtitle/audio API calls
   │   ├ subtitle-panel.ts → Shadow DOM floating panel (Log + Subtitles + Summary + Settings)
   │   └ index.ts          → orchestrates extraction flow
-  └→ Python Backend (server/) → localhost:2185, optional (offline fallback in extension)
-      ├ /transcript  → Bcut ASR → Whisper fallback
-      ├ /summarize   → AI summary (credentials passed in request)
-      └ /write_feishu → Feishu doc sync (credentials passed in request)
+  └→ Python Backend (server/) → localhost:2185
+      ├ /transcript      → Bcut ASR → Whisper fallback
+      ├ /summarize       → AI summary (credentials passed in request)
+      └ /feishu/*        → Feishu Wiki ops via lark-cli (auth managed by lark-cli)
 ```
 
 Messages flow between contexts via `chrome.runtime.sendMessage`. Types are defined in `src/shared/messages.ts`.
 
 ### Server-or-Direct Fallback
 
-For Feishu sync and AI summarization, the background script tries the Python server first. If the server is offline (network error), it falls back to direct API calls:
-- `src/background/feishu-direct.ts` — Direct Feishu REST API calls
+For AI summarization, the background script tries the Python server first. If offline, it falls back to direct API calls:
 - `src/background/summarize-direct.ts` — Direct AI API calls (Claude/OpenAI/Gemini/DeepSeek)
 
-All credentials are stored in `chrome.storage.local` and passed to the server in the request body (server is stateless).
+Feishu operations are server-only (no offline fallback). Auth is managed by lark-cli (`~/.lark-cli/config.json`), configured via `./start-server.sh`.
+
+AI credentials are stored in `chrome.storage.local` and passed to the server in the request body.
 
 ## Key Modules
 
@@ -53,7 +54,7 @@ All credentials are stored in `chrome.storage.local` and passed to the server in
 
 ### `src/content/subtitle-panel.ts`
 - `SubtitlePanel` class — Shadow DOM panel with four tabs: **Log**, **Subtitles**, **Summary**, **Settings**
-- Settings tab: configure Feishu credentials, AI provider/key/model, Bilibili cookie, Whisper model
+- Settings tab: configure AI provider/key/model, Bilibili cookie, Whisper model; shows Feishu auth status
 - All config stored in `chrome.storage.local` (key: `bennunote_config`)
 - Log entries are accumulated in `logLines[]` array
 - Language dropdown appears when multiple subtitle tracks exist; switching triggers `loadTrack()`
@@ -62,13 +63,8 @@ All credentials are stored in `chrome.storage.local` and passed to the server in
 ### `src/background.ts`
 - Routes messages between popup, content script, and backend server
 - Tracks `activeTabId` to route results back to the correct tab
-- WRITE_FEISHU / SUMMARIZE: try server → catch network error → direct API fallback
-- Passes credentials from `chrome.storage.local` in request body to server
-
-### `src/background/feishu-direct.ts`
-- Direct Feishu REST API for offline fallback
-- `getAccessToken()` → `createDocument()` → `createBlockChildren()`
-- Replicates `server/services/feishu_service.py` block-building logic (400-char chunks)
+- WRITE_FEISHU: forwards to server (no offline fallback)
+- SUMMARIZE: try server → catch network error → direct API fallback
 
 ### `src/background/summarize-direct.ts`
 - Direct AI API calls for offline fallback
@@ -81,7 +77,7 @@ All configuration is stored in `chrome.storage.local` under key `bennunote_confi
 
 | Category | Fields | Purpose |
 |----------|--------|---------|
-| Feishu | `feishuAppId`, `feishuAppSecret`, `feishuMode`, `feishuDocToken`, `feishuFolderToken` | Feishu document sync |
+| Feishu Wiki | `feishuWikiRootNodeToken` | Feishu Wiki sync target (auth via lark-cli) |
 | AI Provider | `aiProvider`, plus key/model for each provider | AI summarization |
 | Other | `bilibiliCookie`, `whisperModelSize` | Transcription |
 
@@ -91,7 +87,7 @@ Supported AI providers (pick one via `aiProvider`):
 |----------|-----------|-------------|---------------|
 | `claude_setup_token` | `claudeSetupToken` | `claudeModel` | `claude-haiku-4-5-20251001` |
 | `claude_api` | `claudeApiKey` | `claudeApiModel` | `claude-haiku-4-5-20251001` |
-| `openai` | `openaiApiKey` | `openaiModel` | `gpt-4o-mini` |
+| `openai` | `openaiApiKey` | `openaiModel` | `gpt-5.4` |
 | `gemini` | `geminiApiKey` | `geminiModel` | `gemini-2.5-flash` |
 | `deepseek` | `deepseekApiKey` | `deepseekModel` | `deepseek-chat` |
 
@@ -100,7 +96,7 @@ Supported AI providers (pick one via `aiProvider`):
 - `activeTab` — access current tab for content script messaging
 - `storage` — persist config and logs to `chrome.storage.local`
 - `downloads` — save log files
-- `host_permissions`: `*.bilibili.com/*`, `*.hdslb.com/*`, `localhost:2185/*`, plus external API domains for direct fallback
+- `host_permissions`: `*.bilibili.com/*`, `*.hdslb.com/*`, `localhost:2185/*`, plus AI API domains for direct fallback
 
 ## Workflow
 
