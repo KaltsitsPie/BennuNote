@@ -1,0 +1,5 @@
+fastapi==0.115.*
+uvicorn[standard]==0.34.*
+yt-dlp>=2024.12
+faster-whisper>=1.1.0
+lark-oapi>=1.4.0

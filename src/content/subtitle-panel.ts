@@ -43,6 +43,7 @@ export class SubtitlePanel {
   private onTrackChange: ((track: SubtitleTrack) => void) | null = null;
   private logLines: string[] = [];
   private lastProgressMilestone: number = -1;
+  private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -191,6 +192,9 @@ export class SubtitlePanel {
 
     // Persist to chrome.storage.local
     this.persistLog();
+
+    // Auto-save: debounce 3s after last log entry, so we capture the full run
+    this.scheduleAutoSave();
   }
 
   private persistLog() {
@@ -198,6 +202,27 @@ export class SubtitlePanel {
       chrome.storage?.local?.set({ bennunote_log: this.logLines.join('\n') });
     } catch {
       // storage not available in some contexts
+    }
+  }
+
+  private scheduleAutoSave() {
+    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+    this.autoSaveTimer = setTimeout(() => {
+      this.autoSaveToFile();
+    }, 3000);
+  }
+
+  private autoSaveToFile() {
+    const content = this.logLines.join('\n');
+    const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `bennunote-${date}.log`;
+    try {
+      chrome.runtime.sendMessage(
+        { type: 'SAVE_LOG', content, filename },
+        () => { void chrome.runtime.lastError; }
+      );
+    } catch {
+      // extension context invalidated
     }
   }
 

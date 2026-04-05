@@ -76,17 +76,45 @@ async function handleExtract() {
     }
 
     if (result && result.items.length > 0) {
-      p.log(`Using: ${debug.chosenLang}, ${result.items.length} entries`, 'success');
-      p.setSubtitles(result.items, result.source);
+      if (debug.langMatched) {
+        // Got subtitles in the requested language
+        p.log(`Using: ${debug.chosenLang}, ${result.items.length} entries`, 'success');
+        p.setSubtitles(result.items, result.source);
 
-      // Set up language switcher if multiple tracks available
-      if (tracks.length > 1) {
-        const activeLan = tracks.find(
-          (t) => `${t.lan} (${t.lan_doc})` === debug.chosenLang
-        )?.lan || tracks[0].lan;
+        // Set up language switcher if multiple tracks available
+        if (tracks.length > 1) {
+          const activeLan = tracks.find(
+            (t) => `${t.lan} (${t.lan_doc})` === debug.chosenLang
+          )?.lan || tracks[0].lan;
 
+          p.setTracks(tracks, activeLan, async (track) => {
+            p.log(`Switching to: ${track.lan} (${track.lan_doc})...`, 'step');
+            try {
+              const newResult = await loadTrack(track);
+              p.log(`Loaded ${newResult.items.length} entries`, 'success');
+              p.setSubtitles(newResult.items, newResult.source);
+            } catch (err) {
+              p.log(`Failed to load track: ${err}`, 'error');
+            }
+          });
+        }
+        return;
+      }
+
+      // Subtitles exist but NOT in the requested language
+      p.log(`No zh subtitles found. Available: ${debug.allTracks}`, 'warn');
+      if (!debug.isLoggedIn) {
+        p.log('Not logged in to Bilibili. Login may be required for Chinese subtitles.', 'error');
+      } else if (debug.needLoginSubtitle) {
+        p.log('API says login needed for subtitles (but you ARE logged in — this may be a B站 API issue).', 'warn');
+      }
+      p.log(`Skipping ${debug.chosenLang} — will try Whisper for Chinese`, 'warn');
+
+      // Still set up the language switcher so user can manually pick if they want
+      if (tracks.length > 0) {
+        const activeLan = tracks[0].lan;
         p.setTracks(tracks, activeLan, async (track) => {
-          p.log(`Switching to: ${track.lan} (${track.lan_doc})...`, 'step');
+          p.log(`Manually loading: ${track.lan} (${track.lan_doc})...`, 'step');
           try {
             const newResult = await loadTrack(track);
             p.log(`Loaded ${newResult.items.length} entries`, 'success');
@@ -96,10 +124,10 @@ async function handleExtract() {
           }
         });
       }
-      return;
+      // Fall through to Whisper
+    } else {
+      p.log('No subtitle tracks available for this video', 'warn');
     }
-
-    p.log('No subtitle tracks available for this video', 'warn');
   } catch (err) {
     p.log(`Subtitle API error: ${err}`, 'error');
   }
@@ -118,7 +146,7 @@ async function handleExtract() {
     }
 
     p.log(`Audio bandwidth: ${debug.chosenBandwidth}`, 'info');
-    p.log('Sending audio to Whisper offscreen worker...', 'info');
+    p.log('Sending audio URL to background for download + Whisper...', 'info');
 
     chrome.runtime.sendMessage(
       {
@@ -131,7 +159,7 @@ async function handleExtract() {
         if (chrome.runtime.lastError) {
           p.log(`Failed to send to background: ${chrome.runtime.lastError.message}`, 'error');
         } else {
-          p.log('Whisper request sent, waiting for results...', 'info');
+          p.log('Request sent. Background will download audio and run Whisper.', 'info');
         }
       }
     );

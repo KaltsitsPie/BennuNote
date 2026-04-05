@@ -1,2 +1,8 @@
 node_modules/
 dist/
+
+# Python
+server/.venv/
+__pycache__/
+*.pyc
+*.pyo

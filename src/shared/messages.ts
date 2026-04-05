@@ -12,12 +12,18 @@ export interface SubtitleApiResult {
   videoInfo: { bvid: string; cid: number; title: string };
 }
 
-// Background → Offscreen
+// Content Script → Background: fetch audio and forward to offscreen
 export interface TranscribeRequest {
   type: 'TRANSCRIBE_AUDIO';
   audioUrl: string;
   bvid: string;
   cid: number;
+}
+
+// Background → Offscreen: audio data ready for transcription
+export interface TranscribeAudioData {
+  type: 'TRANSCRIBE_AUDIO_DATA';
+  audioBase64: string;
 }
 
 // Offscreen → Background → Content Script
@@ -56,6 +62,13 @@ export interface PreloadModelResult {
   cached: boolean;
 }
 
+// Content Script → Background: auto-save log file
+export interface SaveLogRequest {
+  type: 'SAVE_LOG';
+  content: string;
+  filename: string;
+}
+
 export type Message =
   | ExtractRequest
   | SubtitleApiResult
@@ -65,4 +78,6 @@ export type Message =
   | AudioUrlRequest
   | AudioUrlResponse
   | PreloadModelRequest
-  | PreloadModelResult;
+  | PreloadModelResult
+  | SaveLogRequest
+  | TranscribeAudioData;

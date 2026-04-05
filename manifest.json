@@ -3,10 +3,12 @@
   "name": "BennuNote",
   "version": "0.1.0",
   "description": "Extract subtitles and transcribe speech from Bilibili videos",
-  "permissions": ["activeTab", "offscreen", "storage"],
+  "permissions": ["activeTab", "offscreen", "storage", "downloads"],
   "host_permissions": [
     "*://*.bilibili.com/*",
-    "*://*.hdslb.com/*"
+    "*://*.hdslb.com/*",
+    "*://*.bilivideo.com/*",
+    "*://*.akamaized.net/*"
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
@@ -23,6 +25,12 @@
   "content_scripts": [
     {
       "matches": ["*://*.bilibili.com/video/*"],
+      "js": ["src/content/page-bridge.ts"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.bilibili.com/video/*"],
       "js": ["src/content/index.ts"],
       "run_at": "document_idle"
     }
@@ -30,6 +38,12 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["ort/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "icons": {
     "16": "public/icons/icon16.png",
     "48": "public/icons/icon48.png",

@@ -4,8 +4,12 @@ import type { TranscribeResult, TranscribeProgress, PreloadModelResult } from '.
 
 // Configure transformers.js for extension environment
 env.allowLocalModels = false;
+
+// Point ONNX Runtime to locally bundled WASM files (CDN is blocked by extension CSP)
+const ortDir = chrome.runtime.getURL('ort/');
 if (env?.backends?.onnx?.wasm) {
   env.backends.onnx.wasm.numThreads = 1;
+  env.backends.onnx.wasm.wasmPaths = ortDir;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,29 +61,54 @@ function sendProgress(progress: TranscribeProgress['progress']) {
   } satisfies TranscribeProgress);
 }
 
-async function transcribeAudio(audioUrl: string): Promise<SubtitleItem[]> {
+/**
+ * Decode base64 string to ArrayBuffer.
+ */
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function transcribeAudio(audioBase64: string): Promise<SubtitleItem[]> {
   const pipe = await getTranscriber();
 
-  sendProgress({ status: 'transcribing', progress: 0 });
+  // Decode base64 to ArrayBuffer
+  sendProgress({ status: 'transcribing', progress: 0, message: 'Decoding audio data...' });
+  console.log('[BennuNote Offscreen] Decoding base64 audio, length:', audioBase64.length);
+  const arrayBuffer = base64ToArrayBuffer(audioBase64);
+  console.log('[BennuNote Offscreen] ArrayBuffer size:', arrayBuffer.byteLength);
 
-  // Fetch audio data
-  const response = await fetch(audioUrl);
-  const arrayBuffer = await response.arrayBuffer();
-
-  // Decode to PCM
-  const audioContext = new OfflineAudioContext(1, 1, 16000);
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  // Decode to PCM using Web Audio API
+  sendProgress({ status: 'transcribing', progress: 0, message: 'Decoding audio format...' });
+  let audioBuffer: AudioBuffer;
+  try {
+    const audioContext = new OfflineAudioContext(1, 1, 16000);
+    audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+    console.log('[BennuNote Offscreen] Audio decoded: duration=', audioBuffer.duration, 'channels=', audioBuffer.numberOfChannels, 'sampleRate=', audioBuffer.sampleRate);
+  } catch (err) {
+    console.error('[BennuNote Offscreen] decodeAudioData failed:', err);
+    sendProgress({ status: 'error', message: `Audio decode failed: ${err}` });
+    return [];
+  }
 
   // Resample to 16kHz mono
-  const offlineCtx = new OfflineAudioContext(1, Math.ceil(audioBuffer.duration * 16000), 16000);
+  sendProgress({ status: 'transcribing', progress: 0, message: 'Resampling to 16kHz...' });
+  const targetLength = Math.ceil(audioBuffer.duration * 16000);
+  const offlineCtx = new OfflineAudioContext(1, targetLength, 16000);
   const source = offlineCtx.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(offlineCtx.destination);
   source.start();
   const resampled = await offlineCtx.startRendering();
   const pcmData = resampled.getChannelData(0);
+  console.log('[BennuNote Offscreen] Resampled: samples=', pcmData.length, 'duration=', pcmData.length / 16000, 's');
 
   // Run Whisper
+  sendProgress({ status: 'transcribing', progress: 0, message: 'Running Whisper...' });
   const result = await pipe(pcmData, {
     language: 'chinese',
     task: 'transcribe',
@@ -92,9 +121,12 @@ async function transcribeAudio(audioUrl: string): Promise<SubtitleItem[]> {
 
   // Parse chunks into subtitle items
   const output = Array.isArray(result) ? result[0] : result;
+  console.log('[BennuNote Offscreen] Whisper output keys:', Object.keys(output || {}));
+
   const chunks = (output as { chunks?: Array<{ timestamp: [number, number]; text: string }> }).chunks || [];
 
   if (chunks.length > 0) {
+    console.log('[BennuNote Offscreen] Got', chunks.length, 'chunks');
     return chunks.map((chunk) => ({
       from: chunk.timestamp[0] ?? 0,
       to: chunk.timestamp[1] ?? chunk.timestamp[0] + 5,
@@ -105,15 +137,17 @@ async function transcribeAudio(audioUrl: string): Promise<SubtitleItem[]> {
   // Fallback: single chunk with full text
   const text = (output as { text: string }).text || '';
   if (text) {
+    console.log('[BennuNote Offscreen] Got full text, length:', text.length);
     return [{ from: 0, to: audioBuffer.duration, content: text.trim() }];
   }
 
+  console.warn('[BennuNote Offscreen] No text output from Whisper');
   return [];
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type === 'TRANSCRIBE_AUDIO') {
-    transcribeAudio(msg.audioUrl)
+  if (msg.type === 'TRANSCRIBE_AUDIO_DATA') {
+    transcribeAudio(msg.audioBase64)
       .then((items) => {
         chrome.runtime.sendMessage({
           type: 'TRANSCRIBE_RESULT',

@@ -34,26 +34,57 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     return false;
   }
 
-  // Content script → forward audio to offscreen for Whisper
+  // Content script → fetch audio in background (has host_permissions) → forward to offscreen
   if (msg.type === 'TRANSCRIBE_AUDIO') {
-    // Remember which tab sent this
     if (sender.tab?.id) {
       activeTabId = sender.tab.id;
     }
-    ensureOffscreenDocument()
-      .then(() => {
-        chrome.runtime.sendMessage(msg);
-      })
-      .catch((err) => {
-        console.error('[BennuNote BG] offscreen creation failed:', err);
-        // Notify content script about the error
-        if (activeTabId) {
-          chrome.tabs.sendMessage(activeTabId, {
-            type: 'TRANSCRIBE_PROGRESS',
-            progress: { status: 'error', message: `Offscreen document error: ${err}` },
-          });
+    const notifyProgress = (status: string, message: string) => {
+      if (activeTabId) {
+        chrome.tabs.sendMessage(activeTabId, {
+          type: 'TRANSCRIBE_PROGRESS',
+          progress: { status, message },
+        }, () => { void chrome.runtime.lastError; });
+      }
+    };
+
+    (async () => {
+      try {
+        // Fetch audio from CDN (background has host_permissions, no CORS)
+        notifyProgress('transcribing', 'Downloading audio from CDN...');
+        const resp = await fetch(msg.audioUrl, {
+          headers: { 'Referer': 'https://www.bilibili.com/' },
+        });
+        if (!resp.ok) {
+          notifyProgress('error', `Audio download failed: HTTP ${resp.status}`);
+          return;
         }
-      });
+        const buffer = await resp.arrayBuffer();
+        const sizeMB = (buffer.byteLength / 1024 / 1024).toFixed(1);
+        notifyProgress('transcribing', `Audio downloaded: ${sizeMB} MB. Encoding...`);
+
+        // Convert to base64
+        const uint8 = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 32768;
+        for (let i = 0; i < uint8.length; i += chunkSize) {
+          const slice = uint8.subarray(i, i + chunkSize);
+          for (let j = 0; j < slice.length; j++) {
+            binary += String.fromCharCode(slice[j]);
+          }
+        }
+        const audioBase64 = btoa(binary);
+        notifyProgress('transcribing', `Sending ${(audioBase64.length / 1024 / 1024).toFixed(1)} MB to Whisper...`);
+
+        // Ensure offscreen document exists and forward
+        await ensureOffscreenDocument();
+        chrome.runtime.sendMessage({ type: 'TRANSCRIBE_AUDIO_DATA', audioBase64 });
+      } catch (err) {
+        console.error('[BennuNote BG] audio fetch/forward failed:', err);
+        notifyProgress('error', `Audio fetch error: ${err}`);
+      }
+    })();
+
     sendResponse({ ok: true });
     return false;
   }
@@ -72,6 +103,29 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
   // Preload result from offscreen — just log it
   if (msg.type === 'PRELOAD_RESULT') {
     console.log(`[BennuNote] Preload result: success=${msg.success}, cached=${msg.cached}`);
+    return false;
+  }
+
+  // Content script → auto-save log to Downloads/BennuNote-logs/
+  if (msg.type === 'SAVE_LOG') {
+    // Use data URL because Blob/createObjectURL is not available in Service Workers
+    const dataUrl = 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(msg.content)));
+    chrome.downloads.download(
+      {
+        url: dataUrl,
+        filename: `BennuNote-logs/${msg.filename}`,
+        conflictAction: 'uniquify',
+        saveAs: false,
+      },
+      (downloadId) => {
+        if (chrome.runtime.lastError) {
+          console.error('[BennuNote] Log save failed:', chrome.runtime.lastError.message);
+        } else {
+          console.log(`[BennuNote] Log saved, downloadId=${downloadId}`);
+        }
+      }
+    );
+    sendResponse({ ok: true });
     return false;
   }
 

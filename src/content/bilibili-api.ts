@@ -14,44 +14,26 @@ function extractBvid(): string | null {
 }
 
 /**
- * Try reading __INITIAL_STATE__ by injecting a page-level script.
- * Content scripts live in an isolated world, so we bridge via a DOM element.
+ * Read __INITIAL_STATE__ from the page context via the MAIN world page-bridge script.
+ * Uses window.postMessage to communicate across worlds (CSP-safe).
  */
-function readInitialStateViaInjection(): Record<string, unknown> | null {
-  try {
-    const id = '__bennunote_state_' + Date.now();
-    const el = document.createElement('div');
-    el.id = id;
-    el.style.display = 'none';
-    document.documentElement.appendChild(el);
+function readInitialStateViaBridge(): Promise<Record<string, unknown> | null> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      resolve(null);
+    }, 1000);
 
-    const script = document.createElement('script');
-    script.textContent = `
-      try {
-        var s = window.__INITIAL_STATE__;
-        if (s && s.videoData) {
-          document.getElementById('${id}').setAttribute('data-state', JSON.stringify({
-            bvid: s.videoData.bvid,
-            cid: s.videoData.cid,
-            title: s.videoData.title,
-            pages: (s.videoData.pages || []).map(function(p){ return {cid:p.cid, part:p.part}; })
-          }));
-        }
-      } catch(e) {}
-    `;
-    document.documentElement.appendChild(script);
-    script.remove();
-
-    const raw = el.getAttribute('data-state');
-    el.remove();
-
-    if (raw) {
-      return JSON.parse(raw);
+    function handler(event: MessageEvent) {
+      if (event.source !== window || event.data?.type !== 'BENNUNOTE_STATE_RESULT') return;
+      window.removeEventListener('message', handler);
+      clearTimeout(timeout);
+      resolve(event.data.state);
     }
-  } catch {
-    // injection failed (CSP or other), fall through
-  }
-  return null;
+
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'BENNUNOTE_GET_STATE' }, '*');
+  });
 }
 
 /**
@@ -83,15 +65,15 @@ async function fetchVideoInfoFromApi(bvid: string): Promise<VideoInfo | null> {
  * Main entry: extract VideoInfo using multiple strategies.
  */
 export async function extractVideoInfo(): Promise<VideoInfo | null> {
-  // Strategy 1: Inject script to read __INITIAL_STATE__ from the page context
-  _log('Trying __INITIAL_STATE__ injection...', 'info');
-  const state = readInitialStateViaInjection();
+  // Strategy 1: Read __INITIAL_STATE__ via MAIN world bridge script
+  _log('Trying __INITIAL_STATE__ via page bridge...', 'info');
+  const state = await readInitialStateViaBridge();
   if (state && state.bvid && state.cid) {
     const params = new URLSearchParams(window.location.search);
     const p = parseInt(params.get('p') || '1', 10);
     const pages = state.pages as Array<{ cid: number; part: string }> | undefined;
     const page = pages?.[p - 1];
-    _log('Got video info from __INITIAL_STATE__', 'success');
+    _log('Got video info from __INITIAL_STATE__ (page bridge)', 'success');
     return {
       bvid: state.bvid as string,
       cid: (page?.cid || state.cid) as number,
@@ -119,22 +101,80 @@ export interface FetchSubtitlesDebug {
   chosenLang?: string;
   allTracks?: string;
   langMatched: boolean;
+  needLoginSubtitle?: boolean;
+  isLoggedIn: boolean;
+  uname?: string;
   rawResponse?: unknown;
+  subtitleRaw?: unknown;
 }
 
 /**
- * Fetch available subtitle tracks from the Bilibili player API.
- * Returns all tracks + auto-selects the best one based on preferredLang.
+ * Check login status via Bilibili's nav API (reliable, unlike checking HttpOnly cookies).
+ */
+async function checkLoginStatus(): Promise<{ isLoggedIn: boolean; uname?: string }> {
+  try {
+    const resp = await fetch('https://api.bilibili.com/x/web-interface/nav', { credentials: 'include' });
+    const data = await resp.json();
+    if (data?.code === 0 && data?.data?.isLogin) {
+      return { isLoggedIn: true, uname: data.data.uname };
+    }
+    return { isLoggedIn: false };
+  } catch {
+    return { isLoggedIn: false };
+  }
+}
+
+/**
+ * Fetch subtitle tracks from the Bilibili player API.
+ * If the preferred language is not found on the first try, retries once after 1s
+ * (the API has known inconsistency where repeated requests may return different tracks).
  */
 export async function fetchSubtitles(
   bvid: string,
   cid: number,
   preferredLang: string = 'zh',
 ): Promise<{ result: SubtitleResult | null; tracks: SubtitleTrack[]; debug: FetchSubtitlesDebug }> {
-  const apiUrl = `https://api.bilibili.com/x/player/wbi/v2?bvid=${bvid}&cid=${cid}`;
-  const debug: FetchSubtitlesDebug = { apiUrl, subtitleCount: 0, langMatched: false };
+  const firstAttempt = await _fetchSubtitlesOnce(bvid, cid, preferredLang);
 
-  const resp = await fetch(apiUrl, { credentials: 'include' });
+  // If we didn't match the preferred language but got some tracks, retry once
+  if (!firstAttempt.debug.langMatched && firstAttempt.tracks.length > 0) {
+    _log('Preferred language not found, retrying in 1s (API inconsistency workaround)...', 'warn');
+    await new Promise((r) => setTimeout(r, 1000));
+    const retry = await _fetchSubtitlesOnce(bvid, cid, preferredLang);
+    if (retry.debug.langMatched) {
+      _log('Retry succeeded — got target language', 'success');
+      return retry;
+    }
+    _log('Retry returned same result', 'info');
+  }
+
+  return firstAttempt;
+}
+
+async function _fetchSubtitlesOnce(
+  bvid: string,
+  cid: number,
+  preferredLang: string,
+): Promise<{ result: SubtitleResult | null; tracks: SubtitleTrack[]; debug: FetchSubtitlesDebug }> {
+  const apiUrl = `https://api.bilibili.com/x/player/wbi/v2?bvid=${bvid}&cid=${cid}`;
+
+  // Check login status via nav API
+  const loginStatus = await checkLoginStatus();
+
+  const debug: FetchSubtitlesDebug = {
+    apiUrl,
+    subtitleCount: 0,
+    langMatched: false,
+    isLoggedIn: loginStatus.isLoggedIn,
+    uname: loginStatus.uname,
+  };
+
+  _log(`Login: ${loginStatus.isLoggedIn ? `YES (${loginStatus.uname})` : 'NO'}`, loginStatus.isLoggedIn ? 'success' : 'warn');
+
+  const resp = await fetch(apiUrl, {
+    credentials: 'include',
+    headers: { 'Referer': window.location.href },
+  });
   debug.responseCode = resp.status;
   const data = await resp.json();
   debug.rawResponse = { code: data?.code, message: data?.message };
@@ -143,8 +183,20 @@ export async function fetchSubtitles(
     return { result: null, tracks: [], debug };
   }
 
+  // Check authentication-related flags
+  const subtitleData = data?.data?.subtitle;
+  debug.needLoginSubtitle = !!data?.data?.need_login_subtitle;
+  // Log the raw subtitle object for debugging
+  debug.subtitleRaw = subtitleData;
+
+  _log(`need_login_subtitle=${debug.needLoginSubtitle}`, 'info');
+  if (subtitleData?.allow_submit !== undefined) {
+    _log(`allow_submit=${subtitleData.allow_submit}`, 'info');
+  }
+  _log(`Subtitle API raw: ${JSON.stringify(subtitleData)}`, 'info');
+
   const rawTracks: Array<{ subtitle_url: string; lan: string; lan_doc: string }> =
-    data?.data?.subtitle?.subtitles || [];
+    subtitleData?.subtitles || [];
   debug.subtitleCount = rawTracks.length;
 
   const tracks: SubtitleTrack[] = rawTracks.map((t) => ({
