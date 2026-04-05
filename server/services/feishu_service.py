@@ -1,131 +1,83 @@
-import lark_oapi as lark
-from lark_oapi.api.docx.v1 import (
-    CreateDocumentRequest,
-    CreateDocumentRequestBody,
-    CreateDocumentBlockChildrenRequest,
-    CreateDocumentBlockChildrenRequestBody,
-)
+# server/services/feishu_service.py
+"""Feishu service — all operations via lark-cli subprocess."""
 import json
+import subprocess as sp
+
+from services.larkcli import run, get_auth_status, LarkCliError
 
 
-def _build_client(app_id: str, app_secret: str) -> lark.Client:
-    return lark.Client.builder().app_id(app_id).app_secret(app_secret).build()
+def auth_status() -> dict:
+    return get_auth_status()
 
 
-def _text_block(text: str) -> dict:
-    """Build a Lark document text block."""
-    return {
-        "block_type": 2,  # text block
-        "text": {
-            "elements": [
-                {
-                    "text_run": {
-                        "content": text,
-                    }
-                }
-            ],
-            "style": {},
-        },
-    }
+def list_wiki_spaces() -> dict:
+    return run("wiki", "spaces", "list")
 
 
-def _heading_block(text: str, level: int = 3) -> dict:
-    """Build a Lark document heading block."""
-    return {
-        "block_type": 4,  # heading block
-        "heading": {
-            "elements": [
-                {
-                    "text_run": {
-                        "content": text,
-                    }
-                }
-            ],
-            "level": level,
-        },
-    }
+def list_wiki_nodes(space_id: str, parent_node_token: str = "") -> dict:
+    params: dict = {"space_id": space_id}
+    if parent_node_token:
+        params["parent_node_token"] = parent_node_token
+    return run("wiki", "nodes", "list", "--params", json.dumps(params))
 
 
-def create_document(
-    app_id: str,
-    app_secret: str,
-    title: str,
-    content: str,
-    folder_token: str = "",
-) -> str:
-    """Create a new Lark document and return its URL."""
-    client = _build_client(app_id, app_secret)
-
-    # Create document
-    req = CreateDocumentRequest.builder().request_body(
-        CreateDocumentRequestBody.builder()
-        .title(title)
-        .folder_token(folder_token if folder_token else None)
-        .build()
-    ).build()
-
-    resp = client.docx.v1.document.create(req)
-    if not resp.success():
-        raise Exception(f"Create document failed: {resp.code} - {resp.msg}")
-
-    doc_id = resp.data.document.document_id
-    _write_content_to_doc(client, doc_id, title, content)
-
-    return f"https://bytedance.larkoffice.com/docx/{doc_id}"
+def create_doc(markdown: str, title: str = "", wiki_node: str = "", folder_token: str = "") -> dict:
+    args = ["docs", "+create", "--markdown", markdown]
+    if title:
+        args += ["--title", title]
+    if wiki_node:
+        args += ["--wiki-node", wiki_node]
+    elif folder_token:
+        args += ["--folder-token", folder_token]
+    return run(*args)
 
 
-def append_to_document(
-    app_id: str,
-    app_secret: str,
-    doc_token: str,
-    title: str,
-    content: str,
-) -> str:
-    """Append content to an existing Lark document and return its URL."""
-    client = _build_client(app_id, app_secret)
-    _write_content_to_doc(client, doc_token, title, content)
-    return f"https://bytedance.larkoffice.com/docx/{doc_token}"
+def fetch_doc(doc: str) -> dict:
+    return run("docs", "+fetch", "--doc", doc)
 
 
-def _write_content_to_doc(
-    client: lark.Client,
-    document_id: str,
-    title: str,
-    content: str,
-):
-    """Write heading + text blocks to a document's first page block."""
-    # Split content into chunks of ~400 chars (Lark block text limit)
-    max_chunk = 400
-    lines = content.split("\n")
-    chunks: list[str] = []
-    current = ""
-    for line in lines:
-        if len(current) + len(line) + 1 > max_chunk:
-            if current:
-                chunks.append(current)
-            current = line
-        else:
-            current = f"{current}\n{line}" if current else line
-    if current:
-        chunks.append(current)
+def update_doc(doc: str, mode: str, markdown: str = "", selection_by_title: str = "",
+               selection_with_ellipsis: str = "", new_title: str = "") -> dict:
+    args = ["docs", "+update", "--doc", doc, "--mode", mode]
+    if markdown:
+        args += ["--markdown", markdown]
+    if selection_by_title:
+        args += ["--selection-by-title", selection_by_title]
+    if selection_with_ellipsis:
+        args += ["--selection-with-ellipsis", selection_with_ellipsis]
+    if new_title:
+        args += ["--new-title", new_title]
+    return run(*args)
 
-    # Build blocks: heading + text chunks
-    children = [_heading_block(title)]
-    for chunk in chunks:
-        children.append(_text_block(chunk))
 
-    body = CreateDocumentBlockChildrenRequestBody.builder().children(
-        json.dumps(children)
-    ).build()
+def search_docs(query: str, page_size: int = 15, page_token: str = "") -> dict:
+    args = ["docs", "+search", "--query", query]
+    if page_size != 15:
+        args += ["--page-size", str(page_size)]
+    if page_token:
+        args += ["--page-token", page_token]
+    return run(*args)
 
-    req = (
-        CreateDocumentBlockChildrenRequest.builder()
-        .document_id(document_id)
-        .block_id(document_id)  # root block = document_id
-        .request_body(body)
-        .build()
-    )
 
-    resp = client.docx.v1.document_block_children.create(req)
-    if not resp.success():
-        raise Exception(f"Write blocks failed: {resp.code} - {resp.msg}")
+def insert_media(doc: str, file_path: str, file_type: str = "image",
+                 align: str = "center", caption: str = "") -> dict:
+    args = ["docs", "+media-insert", "--doc", doc, "--file", file_path, "--type", file_type]
+    if align != "center":
+        args += ["--align", align]
+    if caption:
+        args += ["--caption", caption]
+    return run(*args, timeout=120)
+
+
+def update_whiteboard(whiteboard_token: str, dsl_content: str, overwrite: bool = False) -> dict:
+    args = ["docs", "+whiteboard-update", "--whiteboard-token", whiteboard_token]
+    if overwrite:
+        args += ["--overwrite"]
+    cmd = ["lark-cli", *args]
+    result = sp.run(cmd, input=dsl_content, capture_output=True, text=True, timeout=60)
+    if result.returncode != 0:
+        raise LarkCliError(result.stderr.strip() or "Whiteboard update failed")
+    try:
+        return json.loads(result.stdout)
+    except Exception:
+        return {"raw": result.stdout.strip()}
