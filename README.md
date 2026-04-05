@@ -1,14 +1,16 @@
 # BennuNote
 
-A Chrome extension that extracts subtitles and transcribes speech from Bilibili videos.
+A Chrome extension that extracts subtitles and transcribes speech from Bilibili videos, with AI summarization and Feishu document sync.
 
 ## Features
 
 - **API Subtitle Extraction** — Fetches existing AI-generated or CC subtitles from Bilibili's internal API (instant)
-- **Local Whisper Transcription** — Falls back to in-browser speech-to-text using [transformers.js](https://github.com/huggingface/transformers.js) + Whisper when no subtitles are available
-- **Log Panel** — Real-time debug log showing each step, API responses, and errors
+- **Backend Transcription** — Falls back to Bcut ASR or local Whisper via Python backend when no subtitles are available
+- **AI Summarization** — Generates structured summaries using Claude, OpenAI, Gemini, or DeepSeek (5 providers supported)
+- **Feishu Sync** — Creates or appends subtitle content to Feishu/Lark documents
+- **Offline Capable** — AI summarization and Feishu sync work even without the Python backend (direct API calls from extension)
 - **Subtitle Panel** — Timestamped transcript with click-to-seek, copy-to-clipboard, and download (TXT/SRT)
-- **Model Preloading** — Whisper model is automatically preloaded on install/startup and cached in browser storage
+- **Settings Panel** — Configure all credentials and preferences directly in the panel's Settings tab
 
 ## How It Works
 
@@ -19,24 +21,22 @@ Popup (trigger)
     │   ├ Extract bvid/cid (page injection + API fallback)
     │   ├ Fetch subtitles from Bilibili API
     │   └ Render subtitle panel (Shadow DOM)
-    └→ Offscreen Document
-        └ Whisper transcription via WASM (no server needed)
+    ├→ Python Backend (optional, localhost:2185)
+    │   ├ Bcut ASR / Whisper transcription
+    │   ├ AI summarization (server path)
+    │   └ Feishu doc sync (server path)
+    └→ Direct API calls (fallback when backend offline)
+        ├ AI summarization via provider APIs
+        └ Feishu doc sync via Feishu REST API
 ```
-
-1. Extracts the video ID (`bvid`) and chapter ID (`cid`) from the current Bilibili page
-2. Calls Bilibili's player API to fetch existing AI/CC subtitles
-3. If no subtitles exist, downloads the audio stream and transcribes it locally using Whisper (runs entirely in the browser via WebAssembly)
 
 ## Install
 
 ### From Source
 
 ```bash
-# Clone and install dependencies
 cd BennuNote
 npm install
-
-# Build
 npm run build
 ```
 
@@ -46,12 +46,33 @@ Then load the extension in Chrome:
 2. Enable **Developer mode** (top right)
 3. Click **Load unpacked** and select the `dist/` directory
 
-### Usage
+### Backend (optional, for transcription)
 
-1. Navigate to any Bilibili video page (`bilibili.com/video/...`)
-2. Click the BennuNote extension icon
-3. Click **Extract Subtitles**
-4. View results in the floating panel on the right side of the page
+```bash
+./start-server.sh
+```
+
+The backend is required only for audio transcription (Bcut ASR / Whisper). AI summarization and Feishu sync work without it.
+
+### Configuration
+
+1. Navigate to any Bilibili video page
+2. Click the BennuNote extension icon → **Extract Subtitles**
+3. In the floating panel, click the **Settings** tab (gear icon)
+4. Configure:
+   - **Feishu**: App ID + App Secret (from [Feishu Open Platform](https://open.feishu.cn/app))
+   - **AI Provider**: Pick one of Claude Setup Token / Claude API / OpenAI / Gemini / DeepSeek and enter the API key
+   - Select your preferred model for the chosen provider
+
+## Supported AI Providers
+
+| Provider | Default Model | Get API Key |
+|----------|--------------|-------------|
+| Claude (Setup Token) | Haiku 4.5 | Terminal: `claude setup-token` |
+| Claude (API Key) | Haiku 4.5 | [Anthropic Console](https://console.anthropic.com/settings/keys) |
+| OpenAI | GPT-4o mini | [OpenAI Platform](https://platform.openai.com/api-keys) |
+| Gemini | Gemini 2.5 Flash | [Google AI Studio](https://aistudio.google.com/apikey) |
+| DeepSeek | DeepSeek Chat V3 | [DeepSeek Platform](https://platform.deepseek.com/api_keys) |
 
 ## Tech Stack
 
@@ -59,36 +80,37 @@ Then load the extension in Chrome:
 |-----------|-----------|
 | Extension framework | Chrome Manifest V3 + [CRXJS](https://crxjs.dev/) |
 | Build tool | Vite + TypeScript |
-| Speech-to-text | [transformers.js](https://github.com/huggingface/transformers.js) (Xenova/whisper-small, ONNX + WASM) |
+| Backend | Python + FastAPI |
+| Transcription | Bcut ASR + [faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
+| AI Summary | Anthropic / OpenAI / Google GenAI / DeepSeek APIs |
+| Feishu | [lark-oapi](https://github.com/larksuite/oapi-sdk-python) (server) + REST API (extension fallback) |
 | UI | Shadow DOM (isolated from page styles) |
 
 ## Project Structure
 
 ```
 src/
-├── background.ts          # Service worker: message routing, model preloading
+├── background.ts          # Service worker: message routing, server-or-direct fallback
+├── background/
+│   ├── feishu-direct.ts   # Direct Feishu REST API (offline fallback)
+│   └── summarize-direct.ts # Direct AI API calls (offline fallback)
 ├── content/
 │   ├── index.ts           # Content script entry point
 │   ├── bilibili-api.ts    # Bilibili API calls (subtitles, audio, video info)
-│   ├── subtitle-panel.ts  # Floating panel UI with Log/Subtitles tabs
+│   ├── subtitle-panel.ts  # Floating panel UI (Log/Subtitles/Summary/Settings)
 │   └── subtitle-panel.css
-├── offscreen/
-│   ├── offscreen.html
-│   └── offscreen.ts       # Whisper transcription in offscreen document
 ├── popup/
 │   ├── popup.html
 │   └── popup.ts           # Extension popup UI
 └── shared/
     ├── types.ts            # Shared type definitions
     └── messages.ts         # Message types for cross-context communication
+
+server/                     # Optional Python backend
+├── main.py                # FastAPI app
+├── routers/               # API endpoint handlers
+└── services/              # Business logic (transcription, AI, Feishu)
 ```
-
-## Notes
-
-- The Whisper model (~150MB) is downloaded once and cached in the browser's Cache Storage
-- Subsequent loads read from cache (a few seconds, no network required)
-- Transcription speed depends on your hardware — a 10-minute video may take a few minutes on CPU
-- You must be logged in to Bilibili for some videos' subtitle API to return results
 
 ## License
 
