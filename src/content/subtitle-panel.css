@@ -526,21 +526,6 @@
   margin-bottom: 8px;
 }
 
-.bennu-server-status {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-}
-.bennu-server-online {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-.bennu-server-offline {
-  background: #fbe9e7;
-  color: #c62828;
-}
-
 .bennu-secret-row {
   padding: 8px 10px;
   background: #f8f9fa;
@@ -706,3 +691,34 @@
 }
 .bennu-provider-panel { display: none; }
 .bennu-provider-panel.active { display: block; }
+
+.bennu-model-select {
+  width: 100%;
+  padding: 4px 6px;
+  margin-top: 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 11px;
+  background: #fff;
+  color: #555;
+  outline: none;
+}
+.bennu-model-select:focus { border-color: #00a1d6; }
+
+.bennu-settings-help {
+  font-size: 10px;
+  color: #aaa;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.bennu-settings-help a {
+  color: #00a1d6;
+  text-decoration: none;
+}
+.bennu-settings-help a:hover { text-decoration: underline; }
+.bennu-settings-help code {
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}

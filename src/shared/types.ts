@@ -31,6 +31,20 @@ export interface BennuNoteConfig {
   feishuFolderToken: string;
   bilibiliCookie: string;
   whisperModelSize: 'tiny' | 'base' | 'small' | 'medium' | 'large';
+  // Server secrets stored locally for offline fallback
+  feishuAppId: string;
+  feishuAppSecret: string;
+  aiProvider: string;
+  claudeSetupToken: string;
+  claudeModel: string;
+  claudeApiKey: string;
+  claudeApiModel: string;
+  openaiApiKey: string;
+  openaiModel: string;
+  geminiApiKey: string;
+  geminiModel: string;
+  deepseekApiKey: string;
+  deepseekModel: string;
 }
 
 export const DEFAULT_CONFIG: BennuNoteConfig = {
@@ -39,4 +53,17 @@ export const DEFAULT_CONFIG: BennuNoteConfig = {
   feishuFolderToken: '',
   bilibiliCookie: '',
   whisperModelSize: 'small',
+  feishuAppId: '',
+  feishuAppSecret: '',
+  aiProvider: '',
+  claudeSetupToken: '',
+  claudeModel: '',
+  claudeApiKey: '',
+  claudeApiModel: '',
+  openaiApiKey: '',
+  openaiModel: '',
+  geminiApiKey: '',
+  geminiModel: '',
+  deepseekApiKey: '',
+  deepseekModel: '',
 };

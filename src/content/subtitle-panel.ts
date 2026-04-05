@@ -161,12 +161,11 @@ export class SubtitlePanel {
       <div class="bennu-tab-content" data-content="settings">
         <div class="bennu-settings">
           <div class="bennu-settings-section">
-            <div class="bennu-settings-section-title">Server Config</div>
-            <div class="bennu-server-status">Checking server...</div>
-            <div class="bennu-secret-row" data-key="feishu_app_id">
+            <div class="bennu-settings-section-title">Feishu / Lark</div>
+            <div class="bennu-secret-row" data-key="feishuAppId">
               <div class="bennu-secret-header">
                 <span class="bennu-secret-dot"></span>
-                <span class="bennu-secret-label">Feishu App ID</span>
+                <span class="bennu-secret-label">App ID</span>
                 <span class="bennu-secret-preview"></span>
                 <button class="bennu-btn bennu-secret-update">Update</button>
                 <button class="bennu-btn bennu-secret-clear">Clear</button>
@@ -176,10 +175,10 @@ export class SubtitlePanel {
                 <button class="bennu-btn bennu-secret-save">OK</button>
               </div>
             </div>
-            <div class="bennu-secret-row" data-key="feishu_app_secret">
+            <div class="bennu-secret-row" data-key="feishuAppSecret">
               <div class="bennu-secret-header">
                 <span class="bennu-secret-dot"></span>
-                <span class="bennu-secret-label">Feishu App Secret</span>
+                <span class="bennu-secret-label">App Secret</span>
                 <span class="bennu-secret-preview"></span>
                 <button class="bennu-btn bennu-secret-update">Update</button>
                 <button class="bennu-btn bennu-secret-clear">Clear</button>
@@ -188,6 +187,22 @@ export class SubtitlePanel {
                 <input type="password" placeholder="App Secret">
                 <button class="bennu-btn bennu-secret-save">OK</button>
               </div>
+            </div>
+            <label class="bennu-settings-label">Write Mode</label>
+            <select class="bennu-settings-select" data-setting="feishuMode">
+              <option value="new">New document each time</option>
+              <option value="append">Append to fixed document</option>
+            </select>
+            <div class="bennu-settings-conditional" data-show-when="append">
+              <label class="bennu-settings-label">Document Token</label>
+              <input type="text" class="bennu-settings-input" data-setting="feishuDocToken" placeholder="doccnXXXXXX or paste Feishu URL">
+            </div>
+            <div class="bennu-settings-conditional" data-show-when="new">
+              <label class="bennu-settings-label">Folder Token (optional)</label>
+              <input type="text" class="bennu-settings-input" data-setting="feishuFolderToken" placeholder="fldcnXXXXXX">
+            </div>
+            <div class="bennu-settings-help">
+              <a href="https://open.feishu.cn/app" target="_blank">Feishu Open Platform</a> → Create app → Credentials
             </div>
           </div>
           <div class="bennu-settings-section">
@@ -200,7 +215,7 @@ export class SubtitlePanel {
               <button class="bennu-provider-tab" data-provider="deepseek">DeepSeek</button>
             </div>
             <div class="bennu-provider-panel active" data-panel="claude_setup_token">
-              <div class="bennu-secret-row" data-key="claude_setup_token">
+              <div class="bennu-secret-row" data-key="claudeSetupToken">
                 <div class="bennu-secret-header">
                   <span class="bennu-secret-dot"></span>
                   <span class="bennu-secret-label">Setup Token</span>
@@ -213,12 +228,18 @@ export class SubtitlePanel {
                   <button class="bennu-btn bennu-secret-save">OK</button>
                 </div>
               </div>
+              <select class="bennu-model-select" data-model-key="claudeModel">
+                <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast)</option>
+                <option value="claude-sonnet-4-6-20250514">Sonnet 4.6</option>
+                <option value="claude-opus-4-6-20250514">Opus 4.6</option>
+              </select>
+              <div class="bennu-settings-help">Terminal: <code>claude setup-token</code> → paste output</div>
             </div>
             <div class="bennu-provider-panel" data-panel="claude_api">
-              <div class="bennu-secret-row" data-key="claude_api_key">
+              <div class="bennu-secret-row" data-key="claudeApiKey">
                 <div class="bennu-secret-header">
                   <span class="bennu-secret-dot"></span>
-                  <span class="bennu-secret-label">Claude API Key</span>
+                  <span class="bennu-secret-label">API Key</span>
                   <span class="bennu-secret-preview"></span>
                   <button class="bennu-btn bennu-secret-update">Update</button>
                   <button class="bennu-btn bennu-secret-clear">Clear</button>
@@ -228,12 +249,18 @@ export class SubtitlePanel {
                   <button class="bennu-btn bennu-secret-save">OK</button>
                 </div>
               </div>
+              <select class="bennu-model-select" data-model-key="claudeApiModel">
+                <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast)</option>
+                <option value="claude-sonnet-4-6-20250514">Sonnet 4.6</option>
+                <option value="claude-opus-4-6-20250514">Opus 4.6</option>
+              </select>
+              <div class="bennu-settings-help"><a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a> → API Keys</div>
             </div>
             <div class="bennu-provider-panel" data-panel="openai">
-              <div class="bennu-secret-row" data-key="openai_api_key">
+              <div class="bennu-secret-row" data-key="openaiApiKey">
                 <div class="bennu-secret-header">
                   <span class="bennu-secret-dot"></span>
-                  <span class="bennu-secret-label">OpenAI API Key</span>
+                  <span class="bennu-secret-label">API Key</span>
                   <span class="bennu-secret-preview"></span>
                   <button class="bennu-btn bennu-secret-update">Update</button>
                   <button class="bennu-btn bennu-secret-clear">Clear</button>
@@ -243,12 +270,19 @@ export class SubtitlePanel {
                   <button class="bennu-btn bennu-secret-save">OK</button>
                 </div>
               </div>
+              <select class="bennu-model-select" data-model-key="openaiModel">
+                <option value="gpt-4o-mini">GPT-4o mini (fast)</option>
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+                <option value="gpt-4.1">GPT-4.1</option>
+              </select>
+              <div class="bennu-settings-help"><a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a> → API Keys</div>
             </div>
             <div class="bennu-provider-panel" data-panel="gemini">
-              <div class="bennu-secret-row" data-key="gemini_api_key">
+              <div class="bennu-secret-row" data-key="geminiApiKey">
                 <div class="bennu-secret-header">
                   <span class="bennu-secret-dot"></span>
-                  <span class="bennu-secret-label">Gemini API Key</span>
+                  <span class="bennu-secret-label">API Key</span>
                   <span class="bennu-secret-preview"></span>
                   <button class="bennu-btn bennu-secret-update">Update</button>
                   <button class="bennu-btn bennu-secret-clear">Clear</button>
@@ -258,12 +292,17 @@ export class SubtitlePanel {
                   <button class="bennu-btn bennu-secret-save">OK</button>
                 </div>
               </div>
+              <select class="bennu-model-select" data-model-key="geminiModel">
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (fast)</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              </select>
+              <div class="bennu-settings-help"><a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> → API Keys</div>
             </div>
             <div class="bennu-provider-panel" data-panel="deepseek">
-              <div class="bennu-secret-row" data-key="deepseek_api_key">
+              <div class="bennu-secret-row" data-key="deepseekApiKey">
                 <div class="bennu-secret-header">
                   <span class="bennu-secret-dot"></span>
-                  <span class="bennu-secret-label">DeepSeek API Key</span>
+                  <span class="bennu-secret-label">API Key</span>
                   <span class="bennu-secret-preview"></span>
                   <button class="bennu-btn bennu-secret-update">Update</button>
                   <button class="bennu-btn bennu-secret-clear">Clear</button>
@@ -273,26 +312,18 @@ export class SubtitlePanel {
                   <button class="bennu-btn bennu-secret-save">OK</button>
                 </div>
               </div>
+              <select class="bennu-model-select" data-model-key="deepseekModel">
+                <option value="deepseek-chat">DeepSeek Chat (V3)</option>
+                <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
+              </select>
+              <div class="bennu-settings-help"><a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek Platform</a> → API Keys</div>
             </div>
           </div>
           <div class="bennu-settings-section">
-            <div class="bennu-settings-section-title">Local Settings</div>
-            <label class="bennu-settings-label">Feishu Write Mode</label>
-            <select class="bennu-settings-select" data-setting="feishuMode">
-              <option value="new">New document each time</option>
-              <option value="append">Append to fixed document</option>
-            </select>
-            <div class="bennu-settings-conditional" data-show-when="append">
-              <label class="bennu-settings-label">Document Token</label>
-              <input type="text" class="bennu-settings-input" data-setting="feishuDocToken" placeholder="doccnXXXXXX">
-            </div>
-            <div class="bennu-settings-conditional" data-show-when="new">
-              <label class="bennu-settings-label">Folder Token (optional)</label>
-              <input type="text" class="bennu-settings-input" data-setting="feishuFolderToken" placeholder="fldcnXXXXXX">
-            </div>
+            <div class="bennu-settings-section-title">Other</div>
             <label class="bennu-settings-label">Bilibili Cookie (optional)</label>
             <input type="text" class="bennu-settings-input" data-setting="bilibiliCookie" placeholder="SESSDATA=xxxxx">
-            <label class="bennu-settings-label">Whisper Model</label>
+            <label class="bennu-settings-label">Whisper Model (backend transcription)</label>
             <select class="bennu-settings-select" data-setting="whisperModelSize">
               <option value="tiny">Tiny</option>
               <option value="base">Base</option>
@@ -300,9 +331,9 @@ export class SubtitlePanel {
               <option value="medium">Medium</option>
               <option value="large">Large</option>
             </select>
-            <button class="bennu-btn bennu-settings-save">Save Local Settings</button>
-            <div class="bennu-settings-toast" style="display:none">Saved!</div>
           </div>
+          <button class="bennu-btn bennu-settings-save">Save</button>
+          <div class="bennu-settings-toast" style="display:none">Saved!</div>
         </div>
       </div>
       <div class="bennu-footer" style="display:none">
@@ -386,18 +417,20 @@ export class SubtitlePanel {
         this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-panel').forEach(
           (panel) => panel.classList.toggle('active', panel.dataset.panel === p)
         );
-        // Save the provider selection immediately
-        fetch('http://localhost:2185/config', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ai_provider: p }),
-        }).catch(() => {});
+        this.saveToLocal('aiProvider', p);
       });
     });
 
-    // Settings tab: wire up server secret buttons
+    // Settings tab: wire up model selects
+    this.contentSettings.querySelectorAll<HTMLSelectElement>('.bennu-model-select').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        this.saveToLocal(sel.dataset.modelKey!, sel.value);
+      });
+    });
+
+    // Settings tab: wire up secret row buttons (all local storage)
     this.contentSettings.querySelectorAll<HTMLElement>('.bennu-secret-row').forEach((row) => {
-      const key = row.dataset.key!;
+      const key = row.dataset.key!; // camelCase config key
       const editDiv = row.querySelector<HTMLElement>('.bennu-secret-edit')!;
       const input = editDiv.querySelector<HTMLInputElement>('input')!;
       const btnUpdate = row.querySelector<HTMLButtonElement>('.bennu-secret-update')!;
@@ -405,44 +438,47 @@ export class SubtitlePanel {
       const btnSave = editDiv.querySelector<HTMLButtonElement>('.bennu-secret-save')!;
 
       btnUpdate.addEventListener('click', (e) => { e.stopPropagation(); input.value = ''; editDiv.style.display = 'flex'; input.focus(); });
-      btnSave.addEventListener('click', async (e) => {
+      btnSave.addEventListener('click', (e) => {
         e.stopPropagation();
         const val = input.value.trim();
         if (!val) return;
-        try { await fetch('http://localhost:2185/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: val }) }); } catch {}
+        this.saveToLocal(key, val);
         editDiv.style.display = 'none';
-        this.loadServerSecrets();
+        this.refreshSecretStatus();
       });
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') btnSave.click();
         if (e.key === 'Escape') { editDiv.style.display = 'none'; }
       });
-      btnClear.addEventListener('click', async (e) => {
+      btnClear.addEventListener('click', (e) => {
         e.stopPropagation();
-        try { await fetch(`http://localhost:2185/config/${key}`, { method: 'DELETE' }); } catch {}
-        this.loadServerSecrets();
+        this.saveToLocal(key, '');
+        this.refreshSecretStatus();
       });
     });
 
-    // Settings tab: wire up local settings save
-    const saveLocalBtn = this.contentSettings.querySelector<HTMLButtonElement>('.bennu-settings-save')!;
-    saveLocalBtn.addEventListener('click', (e) => {
+    // Settings tab: save button saves all visible form fields
+    const saveBtn = this.contentSettings.querySelector<HTMLButtonElement>('.bennu-settings-save')!;
+    saveBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const getValue = (setting: string) => {
         const el = this.contentSettings.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-setting="${setting}"]`);
         return el?.value.trim() || '';
       };
-      const config = {
-        feishuMode: getValue('feishuMode') as 'append' | 'new',
-        feishuDocToken: getValue('feishuDocToken'),
-        feishuFolderToken: getValue('feishuFolderToken'),
-        bilibiliCookie: getValue('bilibiliCookie'),
-        whisperModelSize: getValue('whisperModelSize'),
-      };
-      chrome.storage.local.set({ bennunote_config: config }, () => {
-        const toast = this.contentSettings.querySelector<HTMLElement>('.bennu-settings-toast')!;
-        toast.style.display = '';
-        setTimeout(() => (toast.style.display = 'none'), 1500);
+      chrome.storage.local.get('bennunote_config', (data) => {
+        const config = {
+          ...(data.bennunote_config || {}),
+          feishuMode: getValue('feishuMode'),
+          feishuDocToken: getValue('feishuDocToken'),
+          feishuFolderToken: getValue('feishuFolderToken'),
+          bilibiliCookie: getValue('bilibiliCookie'),
+          whisperModelSize: getValue('whisperModelSize'),
+        };
+        chrome.storage.local.set({ bennunote_config: config }, () => {
+          const toast = this.contentSettings.querySelector<HTMLElement>('.bennu-settings-toast')!;
+          toast.style.display = '';
+          setTimeout(() => (toast.style.display = 'none'), 1500);
+        });
       });
     });
 
@@ -498,57 +534,18 @@ export class SubtitlePanel {
     if (tab === 'settings') this.loadSettings();
   }
 
+  private saveToLocal(key: string, value: string) {
+    chrome.storage.local.get('bennunote_config', (data) => {
+      const config = { ...(data.bennunote_config || {}), [key]: value };
+      chrome.storage.local.set({ bennunote_config: config });
+    });
+  }
+
   private loadSettings() {
-    this.loadServerSecrets();
-    this.loadLocalSettings();
-  }
-
-  private async loadServerSecrets() {
-    const statusEl = this.contentSettings.querySelector<HTMLElement>('.bennu-server-status')!;
-    try {
-      const resp = await fetch('http://localhost:2185/config');
-      if (!resp.ok) throw new Error();
-      const data = await resp.json();
-      statusEl.textContent = 'Server connected';
-      statusEl.className = 'bennu-server-status bennu-server-online';
-
-      // Restore active provider tab
-      if (data.ai_provider?.set && data.ai_provider.preview) {
-        const prefix = data.ai_provider.preview.replace('***', '');
-        const providers = ['claude_setup_token', 'claude_api', 'openai', 'gemini', 'deepseek'];
-        const match = providers.find(p => p.startsWith(prefix));
-        if (match) {
-          this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-tab').forEach(
-            (t) => t.classList.toggle('active', t.dataset.provider === match)
-          );
-          this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-panel').forEach(
-            (p) => p.classList.toggle('active', p.dataset.panel === match)
-          );
-        }
-      }
-
-      this.contentSettings.querySelectorAll<HTMLElement>('.bennu-secret-row').forEach((row) => {
-        const key = row.dataset.key!;
-        const dot = row.querySelector<HTMLElement>('.bennu-secret-dot')!;
-        const preview = row.querySelector<HTMLElement>('.bennu-secret-preview')!;
-        const info = data[key];
-        if (info?.set) {
-          dot.classList.add('set');
-          preview.textContent = info.preview;
-        } else {
-          dot.classList.remove('set');
-          preview.textContent = 'not set';
-        }
-      });
-    } catch {
-      statusEl.textContent = 'Server offline — run ./start-server.sh';
-      statusEl.className = 'bennu-server-status bennu-server-offline';
-    }
-  }
-
-  private loadLocalSettings() {
     chrome.storage.local.get('bennunote_config', (data) => {
       const config = { ...(data.bennunote_config || {}) } as Record<string, string>;
+
+      // Restore form fields
       const set = (setting: string, val: string) => {
         const el = this.contentSettings.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-setting="${setting}"]`);
         if (el) el.value = val || '';
@@ -558,7 +555,49 @@ export class SubtitlePanel {
       set('feishuFolderToken', config.feishuFolderToken || '');
       set('bilibiliCookie', config.bilibiliCookie || '');
       set('whisperModelSize', config.whisperModelSize || 'small');
+
+      // Restore model selects
+      this.contentSettings.querySelectorAll<HTMLSelectElement>('.bennu-model-select').forEach((sel) => {
+        const saved = config[sel.dataset.modelKey!];
+        if (saved) sel.value = saved;
+      });
+
+      // Restore active provider tab
+      const provider = config.aiProvider;
+      if (provider) {
+        this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-tab').forEach(
+          (t) => t.classList.toggle('active', t.dataset.provider === provider)
+        );
+        this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-panel').forEach(
+          (p) => p.classList.toggle('active', p.dataset.panel === provider)
+        );
+      }
+
+      // Update secret status dots
+      this.refreshSecretStatusFromConfig(config);
       this.updateSettingsConditional();
+    });
+  }
+
+  private refreshSecretStatus() {
+    chrome.storage.local.get('bennunote_config', (data) => {
+      this.refreshSecretStatusFromConfig({ ...(data.bennunote_config || {}) } as Record<string, string>);
+    });
+  }
+
+  private refreshSecretStatusFromConfig(config: Record<string, string>) {
+    this.contentSettings.querySelectorAll<HTMLElement>('.bennu-secret-row').forEach((row) => {
+      const key = row.dataset.key!;
+      const dot = row.querySelector<HTMLElement>('.bennu-secret-dot')!;
+      const preview = row.querySelector<HTMLElement>('.bennu-secret-preview')!;
+      const val = config[key] || '';
+      if (val) {
+        dot.classList.add('set');
+        preview.textContent = val.length > 4 ? val.substring(0, 4) + '***' : '***';
+      } else {
+        dot.classList.remove('set');
+        preview.textContent = 'not set';
+      }
     });
   }
 
@@ -759,21 +798,18 @@ export class SubtitlePanel {
       return;
     }
 
-    // Save token to server config
+    // Save token to server config + local storage
+    this.saveToLocal('claudeSetupToken', token);
+    this.saveToLocal('aiProvider', 'claude_setup_token');
     fetch('http://localhost:2185/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ claude_setup_token: token }),
-    }).then((resp) => {
-      if (!resp.ok) throw new Error('Failed to save token');
-      this.log('Claude Setup Token saved', 'success');
-      this.hideSetupForm();
-      this.showSummarizeButton();
-      // Auto-trigger summarize after saving
-      this.onSummarize?.();
-    }).catch((err) => {
-      if (errorEl) { errorEl.textContent = `Save failed: ${err}`; errorEl.style.display = ''; }
-    });
+      body: JSON.stringify({ claude_setup_token: token, ai_provider: 'claude_setup_token' }),
+    }).catch(() => {});
+    this.log('Claude Setup Token saved', 'success');
+    this.hideSetupForm();
+    this.showSummarizeButton();
+    this.onSummarize?.();
   }
 
   setSummarizing(loading: boolean) {
@@ -960,29 +996,21 @@ export class SubtitlePanel {
       return;
     }
 
-    // Save credentials to server, doc settings to local storage
-    Promise.all([
-      fetch('http://localhost:2185/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feishu_app_id: appId, feishu_app_secret: appSecret }),
-      }),
-      new Promise<void>((resolve) => {
-        chrome.storage.local.get('bennunote_config', (data) => {
-          const config = { ...(data.bennunote_config || {}), feishuDocToken: docToken, feishuMode: mode };
-          chrome.storage.local.set({ bennunote_config: config }, resolve);
-        });
-      }),
-    ]).then(([resp]) => {
-      if (!(resp as Response).ok) throw new Error('Failed to save credentials');
-      this.log('飞书配置已保存', 'success');
-      this.hideFeishuSetup();
-      // Auto-trigger sync after saving
-      this.onSyncFeishu?.();
-    }).catch((err) => {
-      const errorEl = this.feishuSetupEl.querySelector('.bennu-setup-error') as HTMLElement;
-      if (errorEl) { errorEl.textContent = `保存失败: ${err}`; errorEl.style.display = ''; }
+    // Save credentials to both server and local storage
+    this.saveToLocal('feishuAppId', appId);
+    this.saveToLocal('feishuAppSecret', appSecret);
+    chrome.storage.local.get('bennunote_config', (data) => {
+      const config = { ...(data.bennunote_config || {}), feishuDocToken: docToken, feishuMode: mode };
+      chrome.storage.local.set({ bennunote_config: config });
     });
+    fetch('http://localhost:2185/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feishu_app_id: appId, feishu_app_secret: appSecret }),
+    }).catch(() => {});
+    this.log('飞书配置已保存', 'success');
+    this.hideFeishuSetup();
+    this.onSyncFeishu?.();
   }
 
   showFeishuLink(url: string) {
