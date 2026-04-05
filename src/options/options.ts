@@ -7,6 +7,13 @@ function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
 }
 
+function parseToken(input: string): string {
+  if (!input) return '';
+  const m = input.match(/(?:larkoffice\.com|feishu\.cn|larksuite\.com)\/(?:docx|wiki|docs)\/([A-Za-z0-9]+)/);
+  if (m) return m[1];
+  return input.includes('/') ? '' : input;
+}
+
 function snakeToCamel(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
@@ -132,37 +139,62 @@ document.querySelectorAll<HTMLElement>('.secret-row').forEach((row) => {
 // Initial load
 refreshServerConfig();
 
-// --- Local Settings ---
-
-function updateConditional() {
-  const mode = el<HTMLSelectElement>('feishu-mode').value;
-  document.getElementById('append-fields')!.classList.toggle('visible', mode === 'append');
-  document.getElementById('new-fields')!.classList.toggle('visible', mode === 'new');
+// Check Feishu (lark-cli) auth status
+async function refreshFeishuAuth() {
+  const feishuEl = document.getElementById('feishu-status')!;
+  const logoutBtn = document.getElementById('feishu-logout-btn')!;
+  try {
+    const resp = await fetch(`${SERVER_URL}/feishu/auth/status`);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.tokenStatus === 'valid') {
+        feishuEl.className = 'server-status online';
+        feishuEl.textContent = `Feishu: authenticated as ${data.userName || 'user'}`;
+        logoutBtn.style.display = '';
+      } else {
+        feishuEl.className = 'server-status offline';
+        feishuEl.textContent = 'Feishu: not authenticated — run ./start-server.sh';
+        logoutBtn.style.display = 'none';
+      }
+    } else {
+      feishuEl.className = 'server-status offline';
+      feishuEl.textContent = 'Feishu: server error';
+      logoutBtn.style.display = 'none';
+    }
+  } catch {
+    feishuEl.className = 'server-status offline';
+    feishuEl.textContent = 'Feishu: server offline';
+    logoutBtn.style.display = 'none';
+  }
 }
+refreshFeishuAuth();
+
+// Feishu logout
+el<HTMLButtonElement>('feishu-logout-btn').addEventListener('click', async () => {
+  try {
+    await fetch(`${SERVER_URL}/feishu/auth/logout`, { method: 'POST' });
+  } catch { /* ignore */ }
+  await refreshFeishuAuth();
+});
+
+// --- Local Settings ---
 
 chrome.storage.local.get('bennunote_config', (data) => {
   const saved = data.bennunote_config as Partial<BennuNoteConfig> | undefined;
   const config: BennuNoteConfig = { ...DEFAULT_CONFIG, ...saved };
-  el<HTMLSelectElement>('feishu-mode').value = config.feishuMode;
-  el<HTMLInputElement>('feishu-doc-token').value = config.feishuDocToken;
-  el<HTMLInputElement>('feishu-folder-token').value = config.feishuFolderToken;
   el<HTMLTextAreaElement>('bilibili-cookie').value = config.bilibiliCookie;
   el<HTMLSelectElement>('whisper-model').value = config.whisperModelSize;
-  updateConditional();
+  el<HTMLInputElement>('wiki-root-node').value = config.feishuWikiRootNodeToken || '';
 });
-
-el<HTMLSelectElement>('feishu-mode').addEventListener('change', updateConditional);
 
 el<HTMLButtonElement>('save-btn').addEventListener('click', () => {
   chrome.storage.local.get('bennunote_config', (data) => {
     const existing = data.bennunote_config || {};
     const config = {
       ...existing,
-      feishuMode: el<HTMLSelectElement>('feishu-mode').value,
-      feishuDocToken: el<HTMLInputElement>('feishu-doc-token').value.trim(),
-      feishuFolderToken: el<HTMLInputElement>('feishu-folder-token').value.trim(),
       bilibiliCookie: el<HTMLTextAreaElement>('bilibili-cookie').value.trim(),
       whisperModelSize: el<HTMLSelectElement>('whisper-model').value,
+      feishuWikiRootNodeToken: parseToken(el<HTMLInputElement>('wiki-root-node').value.trim()),
     };
     chrome.storage.local.set({ bennunote_config: config }, () => {
       const toast = document.getElementById('toast')!;

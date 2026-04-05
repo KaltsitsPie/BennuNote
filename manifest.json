@@ -3,12 +3,11 @@
   "name": "BennuNote",
   "version": "0.1.0",
   "description": "Extract subtitles and transcribe speech from Bilibili videos",
-  "permissions": ["activeTab", "storage", "downloads"],
+  "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "*://*.bilibili.com/*",
     "*://*.hdslb.com/*",
     "http://localhost:2185/*",
-    "https://open.feishu.cn/*",
     "https://api.anthropic.com/*",
     "https://api.openai.com/*",
     "https://generativelanguage.googleapis.com/*",

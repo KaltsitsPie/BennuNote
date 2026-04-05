@@ -58,6 +58,9 @@ async function fetchVideoInfoFromApi(bvid: string): Promise<VideoInfo | null> {
     cid: page?.cid || d.cid,
     title: d.title,
     partTitle: page?.part,
+    ownerName: d.owner?.name,
+    ownerMid: d.owner?.mid,
+    coverUrl: d.pic,
   };
 }
 
@@ -79,6 +82,9 @@ export async function extractVideoInfo(): Promise<VideoInfo | null> {
       cid: (page?.cid || state.cid) as number,
       title: state.title as string,
       partTitle: page?.part,
+      ownerName: state.ownerName as string | undefined,
+      ownerMid: state.ownerMid as number | undefined,
+      coverUrl: state.coverUrl as string | undefined,
     };
   }
   _log('__INITIAL_STATE__ not available', 'warn');

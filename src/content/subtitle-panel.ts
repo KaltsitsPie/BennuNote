@@ -77,10 +77,10 @@ export class SubtitlePanel {
   private mergedItems: SubtitleItem[] = [];
   private onTrackChange: ((track: SubtitleTrack) => void) | null = null;
   private logLines: string[] = [];
-  private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private logHourKey = ''; // current hour storage key
   private feishuLink!: HTMLElement;
   private feishuUrl!: HTMLAnchorElement;
-  private feishuSetupEl!: HTMLElement;
   private onSyncFeishu: (() => void) | null = null;
   private onSummarize: (() => void) | null = null;
 
@@ -162,48 +162,27 @@ export class SubtitlePanel {
       <div class="bennu-tab-content" data-content="settings">
         <div class="bennu-settings">
           <div class="bennu-settings-section">
-            <div class="bennu-settings-section-title">Feishu / Lark</div>
-            <div class="bennu-secret-row" data-key="feishuAppId">
-              <div class="bennu-secret-header">
-                <span class="bennu-secret-dot"></span>
-                <span class="bennu-secret-label">App ID</span>
-                <span class="bennu-secret-preview"></span>
-                <button class="bennu-btn bennu-secret-update">Update</button>
-                <button class="bennu-btn bennu-secret-clear">Clear</button>
+            <div class="bennu-settings-section-title">Feishu Wiki</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div class="bennu-feishu-auth-status" style="font-size:12px;color:#999;flex:1">
+                Checking...
               </div>
-              <div class="bennu-secret-edit">
-                <input type="text" placeholder="cli_xxxxxxxx">
-                <button class="bennu-btn bennu-secret-save">OK</button>
+              <button class="bennu-btn bennu-feishu-logout-btn" style="font-size:11px;padding:2px 8px;display:none">Clear Auth</button>
+            </div>
+            <div class="bennu-wiki-config">
+              <div class="bennu-wiki-mode-tabs" style="display:flex;gap:4px;margin-bottom:8px">
+                <button class="bennu-btn bennu-wiki-mode-btn active" data-wiki-mode="existing" style="font-size:11px;padding:3px 10px;flex:1">Use Existing Wiki</button>
+                <button class="bennu-btn bennu-wiki-mode-btn" data-wiki-mode="create" style="font-size:11px;padding:3px 10px;flex:1">Create New Wiki</button>
               </div>
-            </div>
-            <div class="bennu-secret-row" data-key="feishuAppSecret">
-              <div class="bennu-secret-header">
-                <span class="bennu-secret-dot"></span>
-                <span class="bennu-secret-label">App Secret</span>
-                <span class="bennu-secret-preview"></span>
-                <button class="bennu-btn bennu-secret-update">Update</button>
-                <button class="bennu-btn bennu-secret-clear">Clear</button>
+              <div class="bennu-wiki-existing">
+                <input type="text" class="bennu-settings-input bennu-wiki-root-node" placeholder="Paste wiki root page URL (e.g. https://xxx.feishu.cn/wiki/XxxXxx)" spellcheck="false" style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ddd;border-radius:4px">
+                <div style="font-size:11px;color:#aaa;margin-top:2px">Paste the full URL of your wiki root page</div>
               </div>
-              <div class="bennu-secret-edit">
-                <input type="password" placeholder="App Secret">
-                <button class="bennu-btn bennu-secret-save">OK</button>
+              <div class="bennu-wiki-create" style="display:none">
+                <input type="text" class="bennu-settings-input bennu-wiki-create-name" placeholder="Knowledge base name (e.g. My Video Notes)" spellcheck="false" style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px">
+                <button class="bennu-btn bennu-wiki-create-btn" style="font-size:12px;padding:4px 12px;width:100%">Create Knowledge Base</button>
+                <div class="bennu-wiki-create-status" style="font-size:11px;margin-top:4px;display:none"></div>
               </div>
-            </div>
-            <label class="bennu-settings-label">Write Mode</label>
-            <select class="bennu-settings-select" data-setting="feishuMode">
-              <option value="new">New document each time</option>
-              <option value="append">Append to fixed document</option>
-            </select>
-            <div class="bennu-settings-conditional" data-show-when="append">
-              <label class="bennu-settings-label">Document Token</label>
-              <input type="text" class="bennu-settings-input" data-setting="feishuDocToken" placeholder="doccnXXXXXX or paste Feishu URL">
-            </div>
-            <div class="bennu-settings-conditional" data-show-when="new">
-              <label class="bennu-settings-label">Folder Token (optional)</label>
-              <input type="text" class="bennu-settings-input" data-setting="feishuFolderToken" placeholder="fldcnXXXXXX">
-            </div>
-            <div class="bennu-settings-help">
-              <a href="https://open.feishu.cn/app" target="_blank">Feishu Open Platform</a> → Create app → Credentials
             </div>
           </div>
           <div class="bennu-settings-section">
@@ -231,10 +210,18 @@ export class SubtitlePanel {
               </div>
               <select class="bennu-model-select" data-model-key="claudeModel">
                 <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast)</option>
-                <option value="claude-sonnet-4-6-20250514">Sonnet 4.6</option>
-                <option value="claude-opus-4-6-20250514">Opus 4.6</option>
+                <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+                <option value="claude-opus-4-6">Opus 4.6</option>
               </select>
-              <div class="bennu-settings-help">Terminal: <code>claude setup-token</code> → paste output</div>
+              <details class="bennu-settings-guide">
+                <summary>How to get a Setup Token</summary>
+                <div class="bennu-guide-content">
+                  <ol>
+                    <li>Open a terminal and run: <code>claude setup-token</code></li>
+                    <li>Copy the token (starts with <code>sk-ant-oat01-</code>) and paste it above.</li>
+                  </ol>
+                </div>
+              </details>
             </div>
             <div class="bennu-provider-panel" data-panel="claude_api">
               <div class="bennu-secret-row" data-key="claudeApiKey">
@@ -252,10 +239,18 @@ export class SubtitlePanel {
               </div>
               <select class="bennu-model-select" data-model-key="claudeApiModel">
                 <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast)</option>
-                <option value="claude-sonnet-4-6-20250514">Sonnet 4.6</option>
-                <option value="claude-opus-4-6-20250514">Opus 4.6</option>
+                <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+                <option value="claude-opus-4-6">Opus 4.6</option>
               </select>
-              <div class="bennu-settings-help"><a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a> → API Keys</div>
+              <details class="bennu-settings-guide">
+                <summary>How to get a Claude API Key</summary>
+                <div class="bennu-guide-content">
+                  <ol>
+                    <li>Go to <a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a>.</li>
+                    <li>Create a new API key and paste it above.</li>
+                  </ol>
+                </div>
+              </details>
             </div>
             <div class="bennu-provider-panel" data-panel="openai">
               <div class="bennu-secret-row" data-key="openaiApiKey">
@@ -272,12 +267,20 @@ export class SubtitlePanel {
                 </div>
               </div>
               <select class="bennu-model-select" data-model-key="openaiModel">
-                <option value="gpt-4o-mini">GPT-4o mini (fast)</option>
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="gpt-4.1-mini">GPT-4.1 mini</option>
-                <option value="gpt-4.1">GPT-4.1</option>
+                <option value="gpt-5.4">GPT-5.4 (recommended)</option>
+                <option value="gpt-5.4-pro">GPT-5.4 Pro (strongest, Responses API only)</option>
+                <option value="gpt-5.4-mini">GPT-5.4 mini (fast)</option>
+                <option value="gpt-5.4-nano">GPT-5.4 nano (cheapest)</option>
               </select>
-              <div class="bennu-settings-help"><a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a> → API Keys</div>
+              <details class="bennu-settings-guide">
+                <summary>How to get an OpenAI API Key</summary>
+                <div class="bennu-guide-content">
+                  <ol>
+                    <li>Go to <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>.</li>
+                    <li>Create a new API key and paste it above.</li>
+                  </ol>
+                </div>
+              </details>
             </div>
             <div class="bennu-provider-panel" data-panel="gemini">
               <div class="bennu-secret-row" data-key="geminiApiKey">
@@ -297,7 +300,15 @@ export class SubtitlePanel {
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash (fast)</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
               </select>
-              <div class="bennu-settings-help"><a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> → API Keys</div>
+              <details class="bennu-settings-guide">
+                <summary>How to get a Gemini API Key</summary>
+                <div class="bennu-guide-content">
+                  <ol>
+                    <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>.</li>
+                    <li>Create a new API key and paste it above.</li>
+                  </ol>
+                </div>
+              </details>
             </div>
             <div class="bennu-provider-panel" data-panel="deepseek">
               <div class="bennu-secret-row" data-key="deepseekApiKey">
@@ -317,11 +328,21 @@ export class SubtitlePanel {
                 <option value="deepseek-chat">DeepSeek Chat (V3)</option>
                 <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
               </select>
-              <div class="bennu-settings-help"><a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek Platform</a> → API Keys</div>
+              <details class="bennu-settings-guide">
+                <summary>How to get a DeepSeek API Key</summary>
+                <div class="bennu-guide-content">
+                  <ol>
+                    <li>Go to <a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek Platform</a>.</li>
+                    <li>Create a new API key and paste it above.</li>
+                  </ol>
+                </div>
+              </details>
             </div>
           </div>
           <div class="bennu-settings-section">
             <div class="bennu-settings-section-title">Other</div>
+            <label class="bennu-settings-label">Max Tokens (AI output length)</label>
+            <input type="number" class="bennu-settings-input" data-setting="maxTokens" placeholder="4096" min="256" max="32768" step="256">
             <label class="bennu-settings-label">Bilibili Cookie (optional)</label>
             <input type="text" class="bennu-settings-input" data-setting="bilibiliCookie" placeholder="SESSDATA=xxxxx">
             <label class="bennu-settings-label">Whisper Model (backend transcription)</label>
@@ -338,28 +359,14 @@ export class SubtitlePanel {
         </div>
       </div>
       <div class="bennu-footer" style="display:none">
-        <button class="bennu-btn" data-action="copy">Copy Text</button>
-        <button class="bennu-btn" data-action="download-txt">TXT</button>
-        <button class="bennu-btn" data-action="download-srt">SRT</button>
-        <button class="bennu-btn bennu-feishu-btn" data-action="sync-feishu">Sync to Feishu</button>
-      </div>
-      <div class="bennu-feishu-setup" style="display:none">
-        <div class="bennu-setup-title">配置飞书应用</div>
-        <div class="bennu-setup-desc">
-          同步字幕到飞书需要配置应用凭证。前往
-          <a href="https://open.feishu.cn/app" target="_blank" class="bennu-setup-link">飞书开放平台</a>
-          创建应用并获取 App ID 和 App Secret。
+        <div class="bennu-wiki-doc-input">
+          <input type="text" class="bennu-settings-input bennu-wiki-doc-link" placeholder="飞书文档链接（留空则新建）" spellcheck="false">
         </div>
-        <label class="bennu-setup-field-label">App ID</label>
-        <input type="text" class="bennu-setup-input bennu-feishu-appid" placeholder="cli_xxxxxxxx" spellcheck="false" autocomplete="off">
-        <label class="bennu-setup-field-label">App Secret</label>
-        <input type="password" class="bennu-setup-input bennu-feishu-appsecret" placeholder="App Secret" spellcheck="false" autocomplete="off">
-        <label class="bennu-setup-field-label">飞书文档链接 <span class="bennu-setup-optional">（可选，粘贴后追加到该文档）</span></label>
-        <input type="text" class="bennu-setup-input bennu-feishu-docurl" placeholder="https://xxx.larkoffice.com/docx/..." spellcheck="false" autocomplete="off">
-        <div class="bennu-setup-error" style="display:none"></div>
-        <div class="bennu-setup-actions">
-          <button class="bennu-btn bennu-feishu-save-btn" data-action="save-feishu">保存并同步</button>
-          <button class="bennu-btn" data-action="cancel-feishu">取消</button>
+        <div class="bennu-footer-buttons">
+          <button class="bennu-btn" data-action="copy">Copy Text</button>
+          <button class="bennu-btn" data-action="download-txt">TXT</button>
+          <button class="bennu-btn" data-action="download-srt">SRT</button>
+          <button class="bennu-btn bennu-feishu-btn" data-action="sync-feishu">Sync to Feishu</button>
         </div>
       </div>
       <div class="bennu-feishu-link" style="display:none">
@@ -391,7 +398,6 @@ export class SubtitlePanel {
     this.summaryActionsEl = panel.querySelector('.bennu-summary-actions')!;
     this.langSelect = panel.querySelector('.bennu-lang-select')!;
     this.langBar = panel.querySelector('.bennu-lang-bar')!;
-    this.feishuSetupEl = panel.querySelector('.bennu-feishu-setup')!;
     this.feishuLink = panel.querySelector('.bennu-feishu-link')!;
     this.feishuUrl = panel.querySelector('.bennu-feishu-url')!;
 
@@ -428,6 +434,163 @@ export class SubtitlePanel {
         this.saveToLocal(sel.dataset.modelKey!, sel.value);
       });
     });
+
+    // --- Feishu Wiki settings wiring ---
+    const authStatusEl = panel.querySelector('.bennu-feishu-auth-status') as HTMLElement;
+    const logoutBtn = panel.querySelector('.bennu-feishu-logout-btn') as HTMLButtonElement;
+    const wikiRootInput = panel.querySelector<HTMLInputElement>('.bennu-wiki-root-node');
+    const wikiExistingDiv = panel.querySelector('.bennu-wiki-existing') as HTMLElement;
+    const wikiCreateDiv = panel.querySelector('.bennu-wiki-create') as HTMLElement;
+    const wikiCreateNameInput = panel.querySelector<HTMLInputElement>('.bennu-wiki-create-name');
+    const wikiCreateBtn = panel.querySelector('.bennu-wiki-create-btn') as HTMLButtonElement;
+    const wikiCreateStatus = panel.querySelector('.bennu-wiki-create-status') as HTMLElement;
+
+    // Auth status check
+    const refreshAuthStatus = () => {
+      fetch('http://localhost:2185/feishu/auth/status', { signal: AbortSignal.timeout(3000) })
+        .then(r => r.json())
+        .then(data => {
+          if (data.tokenStatus === 'valid') {
+            authStatusEl.textContent = `✓ ${data.userName || 'Authenticated'}`;
+            authStatusEl.style.color = '#4caf50';
+            logoutBtn.style.display = '';
+          } else {
+            authStatusEl.textContent = '✗ Not authenticated — run ./start-server.sh';
+            authStatusEl.style.color = '#f44336';
+            logoutBtn.style.display = 'none';
+          }
+        })
+        .catch(() => {
+          authStatusEl.textContent = '✗ Server offline';
+          authStatusEl.style.color = '#f44336';
+          logoutBtn.style.display = 'none';
+        });
+    };
+    refreshAuthStatus();
+
+    // Logout button
+    logoutBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fetch('http://localhost:2185/feishu/auth/logout', { method: 'POST' })
+        .then(() => refreshAuthStatus())
+        .catch(() => refreshAuthStatus());
+    });
+
+    // Wiki mode tabs (existing vs create)
+    panel.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mode = btn.dataset.wikiMode;
+        panel.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach(
+          (b) => b.classList.toggle('active', b.dataset.wikiMode === mode)
+        );
+        wikiExistingDiv.style.display = mode === 'existing' ? '' : 'none';
+        wikiCreateDiv.style.display = mode === 'create' ? '' : 'none';
+      });
+    });
+
+    // Wiki root node: load from storage and save on change (accepts full URL)
+    if (wikiRootInput) {
+      chrome.storage.local.get('bennunote_config', (data) => {
+        const config = (data.bennunote_config || {}) as Record<string, string>;
+        wikiRootInput.value = config.feishuWikiRootNodeToken || '';
+      });
+      wikiRootInput.addEventListener('change', () => {
+        const raw = wikiRootInput.value.trim();
+        const token = this.parseDocToken(raw);
+        this.saveToLocal('feishuWikiRootNodeToken', token || raw);
+      });
+    }
+
+    // Create new wiki
+    if (wikiCreateBtn) {
+      wikiCreateBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const name = wikiCreateNameInput?.value.trim() || 'BennuNote';
+        wikiCreateBtn.disabled = true;
+        wikiCreateBtn.textContent = 'Creating...';
+        wikiCreateStatus.style.display = '';
+        wikiCreateStatus.style.color = '#999';
+        wikiCreateStatus.textContent = 'Creating wiki space...';
+        try {
+          // 1. Create wiki space
+          const spaceResp = await fetch('http://localhost:2185/feishu/wiki/spaces/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+          });
+          const spaceData = await spaceResp.json();
+          const spaceId = spaceData?.data?.space?.space_id || spaceData?.space_id || '';
+          if (!spaceId) throw new Error(spaceData?.detail || 'Failed to create wiki space');
+
+          wikiCreateStatus.textContent = 'Creating root document...';
+
+          // 2. Create root doc with template content
+          const rootMarkdown = `# 🌌 ${name}
+<callout emoji="ringed_planet" background-color="light-orange" border-color="light-orange">
+欢迎来到 **${name}**！本空间是 BennuNote Chrome 扩展所生成的视频字幕与 AI 总结的统一归档中心
+</callout>
+
+---
+
+## 🎯 愿景和目标
+将 Bilibili 等视频平台上的知识内容，通过自动字幕提取与 AI 总结，沉淀为可检索、可回顾的结构化文档，让「看过的视频」不再遗忘。
+## 📂 知识库结构
+本节点是知识库的**总起节点（目录页）**，起到索引与导航的作用。子节点按视频组织，每篇文档通常包含：
+- **视频基本信息** — 标题、UP主、BV号、链接
+- **完整字幕文本** — 由 BennuNote 自动提取（Bilibili API / Bcut ASR / Whisper 多级降级）
+- **AI 总结** — 由 Claude 生成的结构化摘要
+## ⚙️ 工作流程
+1. 在 Bilibili 视频页面点击 BennuNote 扩展的「提取字幕」按钮
+1. 扩展自动获取字幕（优先官方字幕 → Bcut ASR → Whisper 转录）
+1. 点击「AI 总结」生成结构化摘要
+1. 点击「同步到飞书」将字幕与总结写入本知识库
+## 🔗 相关链接
+- [BennuNote 项目仓库](https://github.com) — 扩展源码与开发文档
+- [Transcript 使用说明](https://github.com) — 安装配置与使用指南
+
+
+# 📖 知识空间目录
+
+`;
+          const docResp = await fetch('http://localhost:2185/feishu/docs/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              markdown: rootMarkdown,
+              title: name,
+              wiki_node: spaceId,
+            }),
+          });
+          const docData = await docResp.json();
+          const docUrl = docData?.data?.doc_url || docData?.doc_url || '';
+          const nodeToken = this.parseDocToken(docUrl);
+
+          if (nodeToken) {
+            this.saveToLocal('feishuWikiRootNodeToken', nodeToken);
+            if (wikiRootInput) wikiRootInput.value = nodeToken;
+          }
+
+          wikiCreateStatus.style.color = '#4caf50';
+          wikiCreateStatus.innerHTML = docUrl
+            ? `✓ Created! <a href="${docUrl}" target="_blank" style="color:#00a1d6">Open in Feishu →</a>`
+            : '✓ Created!';
+
+          // Switch to existing mode to show the token
+          panel.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach(
+            (b) => b.classList.toggle('active', b.dataset.wikiMode === 'existing')
+          );
+          wikiExistingDiv.style.display = '';
+          wikiCreateDiv.style.display = 'none';
+        } catch (err) {
+          wikiCreateStatus.style.color = '#f44336';
+          wikiCreateStatus.textContent = `✗ ${err}`;
+        } finally {
+          wikiCreateBtn.disabled = false;
+          wikiCreateBtn.textContent = 'Create Knowledge Base';
+        }
+      });
+    }
 
     // Settings tab: wire up secret row buttons (all local storage)
     this.contentSettings.querySelectorAll<HTMLElement>('.bennu-secret-row').forEach((row) => {
@@ -469,11 +632,9 @@ export class SubtitlePanel {
       chrome.storage.local.get('bennunote_config', (data) => {
         const config = {
           ...(data.bennunote_config || {}),
-          feishuMode: getValue('feishuMode'),
-          feishuDocToken: getValue('feishuDocToken'),
-          feishuFolderToken: getValue('feishuFolderToken'),
           bilibiliCookie: getValue('bilibiliCookie'),
           whisperModelSize: getValue('whisperModelSize'),
+          maxTokens: parseInt(getValue('maxTokens'), 10) || 4096,
         };
         chrome.storage.local.set({ bennunote_config: config }, () => {
           const toast = this.contentSettings.querySelector<HTMLElement>('.bennu-settings-toast')!;
@@ -482,10 +643,6 @@ export class SubtitlePanel {
         });
       });
     });
-
-    // Settings tab: mode conditional fields
-    const modeSelect = this.contentSettings.querySelector<HTMLSelectElement>('[data-setting="feishuMode"]')!;
-    modeSelect.addEventListener('change', () => this.updateSettingsConditional());
 
     // Event delegation
     panel.addEventListener('click', (e) => {
@@ -511,8 +668,20 @@ export class SubtitlePanel {
       else if (action === 'regenerate') this.onSummarize?.();
       else if (action === 'save-token') this.handleSaveToken();
       else if (action === 'cancel-setup') this.hideSetupForm();
-      else if (action === 'save-feishu') this.handleSaveFeishu();
-      else if (action === 'cancel-feishu') this.hideFeishuSetup();
+
+      // Scope copy button
+      if (target.closest('.bennu-scope-copy')) {
+        const box = target.closest('.bennu-scope-box-wrapper')?.querySelector('.bennu-scope-box');
+        if (box) {
+          navigator.clipboard.writeText(box.textContent || '').then(() => {
+            const btn = target.closest('.bennu-scope-copy') as HTMLElement;
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = orig; }, 1500);
+          });
+        }
+        return;
+      }
 
       const item = target.closest('.bennu-subtitle-item') as HTMLElement | null;
       if (item?.dataset.time) {
@@ -552,10 +721,8 @@ export class SubtitlePanel {
         const el = this.contentSettings.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-setting="${setting}"]`);
         if (el) el.value = val || '';
       };
-      set('feishuMode', config.feishuMode || 'new');
-      set('feishuDocToken', config.feishuDocToken || '');
-      set('feishuFolderToken', config.feishuFolderToken || '');
       set('bilibiliCookie', config.bilibiliCookie || '');
+      set('maxTokens', String(config.maxTokens || 4096));
       set('whisperModelSize', config.whisperModelSize || 'small');
 
       // Restore model selects
@@ -577,7 +744,6 @@ export class SubtitlePanel {
 
       // Update secret status dots
       this.refreshSecretStatusFromConfig(config);
-      this.updateSettingsConditional();
     });
   }
 
@@ -603,11 +769,10 @@ export class SubtitlePanel {
     });
   }
 
-  private updateSettingsConditional() {
-    const mode = this.contentSettings.querySelector<HTMLSelectElement>('[data-setting="feishuMode"]')?.value || 'new';
-    this.contentSettings.querySelectorAll<HTMLElement>('.bennu-settings-conditional').forEach((el) => {
-      el.style.display = el.dataset.showWhen === mode ? '' : 'none';
-    });
+  /** Get the target doc token from the wiki doc link input in the footer. */
+  getWikiDocLink(): string {
+    const input = this.footerEl.querySelector<HTMLInputElement>('.bennu-wiki-doc-link');
+    return this.parseDocToken(input?.value.trim() || '');
   }
 
   show() {
@@ -640,46 +805,54 @@ export class SubtitlePanel {
     this.logEl.appendChild(entry);
     this.logEl.scrollTop = this.logEl.scrollHeight;
 
-    // Persist to chrome.storage.local
-    this.persistLog();
-
-    // Auto-save: debounce 3s after last log entry, so we capture the full run
-    this.scheduleAutoSave();
+    // Debounced persist to chrome.storage.local (1s)
+    this.schedulePersist();
   }
 
-  private persistLog() {
+  private static hourKey(): string {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `log_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}`;
+  }
+
+  private schedulePersist() {
+    if (this.persistTimer) return;
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      const key = SubtitlePanel.hourKey();
+      if (key !== this.logHourKey) {
+        // Hour rolled over — start fresh for new key
+        this.logHourKey = key;
+      }
+      try {
+        chrome.storage?.local?.set({ [key]: this.logLines.join('\n') });
+        this.cleanOldLogs();
+      } catch { /* storage not available */ }
+    }, 1000);
+  }
+
+  private cleanOldLogs() {
     try {
-      chrome.storage?.local?.set({ bennunote_log: this.logLines.join('\n') });
-    } catch {
-      // storage not available in some contexts
-    }
-  }
-
-  private scheduleAutoSave() {
-    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
-    this.autoSaveTimer = setTimeout(() => {
-      this.autoSaveToFile();
-    }, 3000);
-  }
-
-  private autoSaveToFile() {
-    const content = this.logLines.join('\n');
-    const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `bennunote-${date}.log`;
-    try {
-      chrome.runtime.sendMessage(
-        { type: 'SAVE_LOG', content, filename },
-        () => { void chrome.runtime.lastError; }
-      );
-    } catch {
-      // extension context invalidated
-    }
+      chrome.storage?.local?.get(null, (all) => {
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const stale = Object.keys(all).filter((k) => {
+          if (!k.startsWith('log_')) return false;
+          // parse "log_YYYY-MM-DD-HH"
+          const m = k.match(/^log_(\d{4})-(\d{2})-(\d{2})-(\d{2})$/);
+          if (!m) return false;
+          const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4]);
+          return d.getTime() < cutoff;
+        });
+        if (stale.length) chrome.storage.local.remove(stale);
+      });
+    } catch { /* ignore */ }
   }
 
   private saveLog() {
+    const key = SubtitlePanel.hourKey();
     const content = this.logLines.join('\n');
-    const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    this.downloadFile(content, `bennunote-log-${date}.txt`, 'text/plain');
+    const filename = `${key.replace('log_', 'bennunote-')}.txt`;
+    this.downloadFile(content, filename, 'text/plain');
     this.log('Log saved to file', 'success');
   }
 
@@ -931,35 +1104,6 @@ export class SubtitlePanel {
     this.onSyncFeishu = handler;
   }
 
-  /** Show inline Feishu setup form when credentials are not configured. */
-  showFeishuSetup() {
-    // Pre-fill doc token from local config
-    chrome.storage.local.get('bennunote_config', (data) => {
-      const config = (data.bennunote_config || {}) as Partial<import('../shared/types').BennuNoteConfig>;
-      const docUrlInput = this.feishuSetupEl.querySelector('.bennu-feishu-docurl') as HTMLInputElement;
-      if (docUrlInput) {
-        if (config.feishuDocToken) docUrlInput.value = config.feishuDocToken;
-        else docUrlInput.value = '';
-      }
-    });
-    // Pre-fill app id/secret previews from server config
-    const appIdInput = this.feishuSetupEl.querySelector('.bennu-feishu-appid') as HTMLInputElement;
-    const appSecretInput = this.feishuSetupEl.querySelector('.bennu-feishu-appsecret') as HTMLInputElement;
-    if (appIdInput) appIdInput.value = '';
-    if (appSecretInput) appSecretInput.value = '';
-    const errorEl = this.feishuSetupEl.querySelector('.bennu-setup-error') as HTMLElement;
-    if (errorEl) errorEl.style.display = 'none';
-    this.feishuSetupEl.style.display = '';
-    this.footerEl.style.display = 'none';
-  }
-
-  private hideFeishuSetup() {
-    this.feishuSetupEl.style.display = 'none';
-    if (this.items.length > 0) {
-      this.footerEl.style.display = '';
-    }
-  }
-
   private parseDocToken(input: string): string {
     input = input.trim();
     if (!input) return '';
@@ -970,51 +1114,6 @@ export class SubtitlePanel {
     // If it looks like a plain token (no slashes), use as-is
     if (!input.includes('/')) return input;
     return '';
-  }
-
-  private handleSaveFeishu() {
-    const appIdInput = this.feishuSetupEl.querySelector('.bennu-feishu-appid') as HTMLInputElement;
-    const appSecretInput = this.feishuSetupEl.querySelector('.bennu-feishu-appsecret') as HTMLInputElement;
-    const docUrlInput = this.feishuSetupEl.querySelector('.bennu-feishu-docurl') as HTMLInputElement;
-    const errorEl = this.feishuSetupEl.querySelector('.bennu-setup-error') as HTMLElement;
-
-    const appId = appIdInput?.value.trim() || '';
-    const appSecret = appSecretInput?.value.trim() || '';
-    const docUrlRaw = docUrlInput?.value.trim() || '';
-
-    if (!appId) {
-      if (errorEl) { errorEl.textContent = 'App ID 不能为空'; errorEl.style.display = ''; }
-      return;
-    }
-    if (!appSecret) {
-      if (errorEl) { errorEl.textContent = 'App Secret 不能为空'; errorEl.style.display = ''; }
-      return;
-    }
-
-    const docToken = this.parseDocToken(docUrlRaw);
-    const mode = docToken ? 'append' : 'new';
-
-    // If user pasted a URL but we couldn't parse it
-    if (docUrlRaw && !docToken) {
-      if (errorEl) { errorEl.textContent = '无法识别文档链接，请粘贴完整的飞书文档 URL 或文档 Token'; errorEl.style.display = ''; }
-      return;
-    }
-
-    // Save credentials to both server and local storage
-    this.saveToLocal('feishuAppId', appId);
-    this.saveToLocal('feishuAppSecret', appSecret);
-    chrome.storage.local.get('bennunote_config', (data) => {
-      const config = { ...(data.bennunote_config || {}), feishuDocToken: docToken, feishuMode: mode };
-      chrome.storage.local.set({ bennunote_config: config });
-    });
-    fetch('http://localhost:2185/config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feishu_app_id: appId, feishu_app_secret: appSecret }),
-    }).catch(() => {});
-    this.log('飞书配置已保存', 'success');
-    this.hideFeishuSetup();
-    this.onSyncFeishu?.();
   }
 
   showFeishuLink(url: string) {

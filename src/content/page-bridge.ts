@@ -19,6 +19,9 @@
             bvid: s.videoData.bvid,
             cid: s.videoData.cid,
             title: s.videoData.title,
+            ownerName: s.videoData.owner?.name,
+            ownerMid: s.videoData.owner?.mid,
+            coverUrl: s.videoData.pic,
             pages: (s.videoData.pages || []).map((p: { cid: number; part: string }) => ({
               cid: p.cid,
               part: p.part,

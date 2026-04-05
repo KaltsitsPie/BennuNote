@@ -1,7 +1,6 @@
 import type { Message } from './shared/messages';
 import type { BennuNoteConfig } from './shared/types';
 import { DEFAULT_CONFIG } from './shared/types';
-import { writeFeishuDirect } from './background/feishu-direct';
 import { summarizeDirect } from './background/summarize-direct';
 
 let activeTabId: number | null = null;
@@ -75,14 +74,10 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     return false;
   }
 
-  // Write to Feishu (server → direct fallback)
+  // Write to Feishu Wiki (server only — no fallback)
   if (msg.type === 'WRITE_FEISHU') {
-    const tabId = sender.tab?.id || activeTabId;
     (async () => {
       const config = await getConfig();
-      let docUrl: string | undefined;
-      let error: string | undefined;
-
       try {
         const resp = await fetch('http://localhost:2185/write_feishu', {
           method: 'POST',
@@ -90,47 +85,40 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
           body: JSON.stringify({
             text: msg.text,
             title: msg.title,
-            mode: config.feishuMode || 'new',
-            doc_token: config.feishuDocToken || '',
-            folder_token: config.feishuFolderToken || '',
-            app_id: config.feishuAppId || '',
-            app_secret: config.feishuAppSecret || '',
+            items: msg.items || [],
+            target_doc_token: msg.targetDocToken || '',
+            video_info: msg.videoInfo || { bvid: '', title: msg.title },
+            wiki_node: config.feishuWikiRootNodeToken || '',
           }),
         });
         const data = await resp.json();
-        if (resp.ok && data.doc_url) docUrl = data.doc_url;
-        else error = data.detail || 'Server error';
-      } catch {
-        // Server offline → direct fallback
-        try {
-          const result = await writeFeishuDirect(
-            config, msg.title, msg.text,
-            config.feishuMode || 'new',
-            config.feishuDocToken || '',
-            config.feishuFolderToken || '',
-          );
-          docUrl = result.doc_url;
-        } catch (e) { error = `${e}`; }
+        if (resp.ok && data.doc_url) {
+          sendResponse({ type: 'WRITE_FEISHU_RESULT', success: true, docUrl: data.doc_url });
+        } else {
+          sendResponse({ type: 'WRITE_FEISHU_RESULT', success: false, error: data.detail || 'Server error' });
+        }
+      } catch (err) {
+        sendResponse({
+          type: 'WRITE_FEISHU_RESULT', success: false,
+          error: `Server offline. Start the backend: ./start-server.sh — ${err}`,
+        });
       }
-
-      if (tabId) chrome.tabs.sendMessage(tabId, docUrl
-        ? { type: 'WRITE_FEISHU_RESULT', success: true, docUrl }
-        : { type: 'WRITE_FEISHU_RESULT', success: false, error },
-      () => { void chrome.runtime.lastError; });
     })();
-    sendResponse({ ok: true });
-    return false;
+    return true;
   }
 
   // Summarize (server → direct fallback)
+  // Use `return true` to keep the message channel open so the MV3 service worker
+  // stays alive until sendResponse is called. Without this, Chrome may terminate
+  // the SW before the async AI call completes, causing results to be silently lost.
   if (msg.type === 'SUMMARIZE') {
-    const tabId = sender.tab?.id || activeTabId;
     (async () => {
       const config = await getConfig();
       const { provider, apiKey, model } = getAIParams(config);
       let summary: string | undefined;
       let error: string | undefined;
 
+      const maxTokens = msg.maxTokens || config.maxTokens || 4096;
       try {
         const resp = await fetch('http://localhost:2185/summarize', {
           method: 'POST',
@@ -138,6 +126,7 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
           body: JSON.stringify({
             text: msg.text, title: msg.title,
             provider, api_key: apiKey, model: model || undefined,
+            max_tokens: maxTokens,
           }),
         });
         const data = await resp.json();
@@ -146,29 +135,15 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
       } catch {
         // Server offline → direct fallback
         try {
-          summary = await summarizeDirect(config, msg.title, msg.text);
+          summary = await summarizeDirect(config, msg.title, msg.text, maxTokens);
         } catch (e) { error = `${e}`; }
       }
 
-      if (tabId) chrome.tabs.sendMessage(tabId, summary
+      sendResponse(summary
         ? { type: 'SUMMARIZE_RESULT', success: true, summary }
-        : { type: 'SUMMARIZE_RESULT', success: false, error },
-      () => { void chrome.runtime.lastError; });
+        : { type: 'SUMMARIZE_RESULT', success: false, error });
     })();
-    sendResponse({ ok: true });
-    return false;
-  }
-
-  if (msg.type === 'SAVE_LOG') {
-    const dataUrl = 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(msg.content)));
-    chrome.downloads.download({
-      url: dataUrl,
-      filename: `BennuNote-logs/${msg.filename}`,
-      conflictAction: 'uniquify',
-      saveAs: false,
-    }, () => { void chrome.runtime.lastError; });
-    sendResponse({ ok: true });
-    return false;
+    return true;
   }
 
   return false;

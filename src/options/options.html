@@ -143,37 +143,17 @@
   <div class="section">
     <h2>Server Secrets</h2>
     <div id="server-status" class="server-status loading">Checking server...</div>
+    <div id="feishu-status" class="server-status loading">Checking Feishu auth...</div>
+    <button class="btn-sm danger" id="feishu-logout-btn" style="display:none;margin-bottom:12px">Clear Auth</button>
+  </div>
 
-    <div class="secret-row" data-key="feishu_app_id">
-      <div class="secret-header">
-        <span class="status-dot"></span>
-        <span class="secret-label">Feishu App ID</span>
-        <span class="secret-preview"></span>
-        <button class="btn-sm btn-update">Update</button>
-        <button class="btn-sm danger btn-clear">Clear</button>
-      </div>
-      <div class="secret-edit">
-        <input type="text" placeholder="cli_xxxxxxxx">
-        <button class="btn-sm btn-save">Save</button>
-        <button class="btn-sm btn-cancel">Cancel</button>
-      </div>
+  <div class="section">
+    <h2>Feishu Wiki</h2>
+    <label for="wiki-root-node">Wiki Root Node (URL or token)</label>
+    <input type="text" id="wiki-root-node" placeholder="https://xxx.feishu.cn/wiki/XxxXxxxx or token">
+    <div style="font-size:12px;color:#999;margin-top:-8px;margin-bottom:12px">
+      New documents will be created under this node. Paste a Feishu wiki page URL or node token.
     </div>
-
-    <div class="secret-row" data-key="feishu_app_secret">
-      <div class="secret-header">
-        <span class="status-dot"></span>
-        <span class="secret-label">Feishu App Secret</span>
-        <span class="secret-preview"></span>
-        <button class="btn-sm btn-update">Update</button>
-        <button class="btn-sm danger btn-clear">Clear</button>
-      </div>
-      <div class="secret-edit">
-        <input type="password" placeholder="Your App Secret">
-        <button class="btn-sm btn-save">Save</button>
-        <button class="btn-sm btn-cancel">Cancel</button>
-      </div>
-    </div>
-
   </div>
 
   <div class="section">
@@ -237,22 +217,6 @@
     </div>
   </div>
 
-  <div class="section">
-    <h2>Feishu / Lark</h2>
-    <label for="feishu-mode">Write Mode</label>
-    <select id="feishu-mode">
-      <option value="new">New document each time</option>
-      <option value="append">Append to fixed document</option>
-    </select>
-    <div id="append-fields" class="conditional">
-      <label for="feishu-doc-token">Fixed Document Token</label>
-      <input type="text" id="feishu-doc-token" placeholder="doccnXXXXXX">
-    </div>
-    <div id="new-fields" class="conditional visible">
-      <label for="feishu-folder-token">Target Folder Token (optional)</label>
-      <input type="text" id="feishu-folder-token" placeholder="fldcnXXXXXX">
-    </div>
-  </div>
 
   <div class="section">
     <h2>Bilibili</h2>

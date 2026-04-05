@@ -27,18 +27,20 @@ export interface TranscriptResult {
   error?: string;
 }
 
-// Content Script → Background: auto-save log file
-export interface SaveLogRequest {
-  type: 'SAVE_LOG';
-  content: string;
-  filename: string;
-}
-
-// Content Script → Background: write subtitles to Feishu
+// Content Script → Background: write subtitles to Feishu Wiki
 export interface WriteFeishuRequest {
   type: 'WRITE_FEISHU';
   text: string;
   title: string;
+  items?: { from: number; to: number; content: string }[];
+  videoInfo?: {
+    bvid: string;
+    title: string;
+    ownerName?: string;
+    ownerMid?: number;
+    coverUrl?: string;
+  };
+  targetDocToken?: string;
 }
 
 // Background → Content Script: Feishu write result
@@ -54,6 +56,7 @@ export interface SummarizeRequest {
   type: 'SUMMARIZE';
   text: string;
   title: string;
+  maxTokens?: number;
 }
 
 // Background → Content Script: summary result
@@ -69,7 +72,6 @@ export type Message =
   | SubtitleApiResult
   | TranscriptRequest
   | TranscriptResult
-  | SaveLogRequest
   | WriteFeishuRequest
   | WriteFeishuResult
   | SummarizeRequest

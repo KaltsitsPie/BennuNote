@@ -5,7 +5,7 @@ import type { BennuNoteConfig, SubtitleItem } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/types';
 
 let panel: SubtitlePanel | null = null;
-let currentVideoInfo: { bvid: string; cid: number; title: string } | null = null;
+let currentVideoInfo: { bvid: string; cid: number; title: string; ownerName?: string; ownerMid?: number; coverUrl?: string } | null = null;
 let currentItems: SubtitleItem[] = [];
 let backendOnline = false;
 
@@ -17,23 +17,62 @@ function getPanel(): SubtitlePanel {
 
     panel.setSyncHandler(() => {
       if (!currentVideoInfo || !panel) return;
-      chrome.storage.local.get('bennunote_config', (data) => {
-        const config: BennuNoteConfig = { ...DEFAULT_CONFIG, ...(data.bennunote_config as Partial<BennuNoteConfig> | undefined) };
-        panel!.setFeishuSyncing(true);
-        panel!.log('Syncing subtitles to Feishu...', 'step');
-        const text = currentItems.map(i => i.content).join('\n');
-        const title = `${currentVideoInfo!.title} - ${new Date().toLocaleDateString('zh-CN')}`;
-        chrome.runtime.sendMessage({ type: 'WRITE_FEISHU', text, title });
-      });
+      const p = panel!;
+      p.setFeishuSyncing(true);
+      p.log('Syncing subtitles to Feishu Wiki...', 'step');
+      const text = currentItems.map(i => i.content).join('\n');
+      const items = currentItems.map(i => ({ from: i.from, to: i.to, content: i.content }));
+      const title = `${currentVideoInfo!.title} - ${new Date().toLocaleDateString('zh-CN')}`;
+      const targetDocToken = p.getWikiDocLink() || undefined;
+      const videoInfo = {
+        bvid: currentVideoInfo!.bvid,
+        title: currentVideoInfo!.title,
+        ownerName: currentVideoInfo!.ownerName,
+        ownerMid: currentVideoInfo!.ownerMid,
+        coverUrl: currentVideoInfo!.coverUrl,
+      };
+      chrome.runtime.sendMessage(
+        { type: 'WRITE_FEISHU', text, title, items, videoInfo, targetDocToken },
+        (response) => {
+          p.setFeishuSyncing(false);
+          if (chrome.runtime.lastError) {
+            p.log(`Feishu sync failed: ${chrome.runtime.lastError.message}`, 'error');
+            return;
+          }
+          if (response?.success && response.docUrl) {
+            p.log('Feishu sync successful!', 'success');
+            p.showFeishuLink(response.docUrl);
+          } else {
+            p.log(`Feishu sync failed: ${response?.error || 'Unknown error'}`, 'error');
+          }
+        },
+      );
     });
 
     panel.setSummarizeHandler(() => {
       if (!currentVideoInfo || currentItems.length === 0 || !panel) return;
-      panel!.setSummarizing(true);
-      panel!.log('Generating AI summary...', 'step');
+      const p = panel!;
+      p.setSummarizing(true);
+      p.log('Generating AI summary...', 'step');
       const text = currentItems.map(i => i.content).join('\n');
       const title = currentVideoInfo!.title;
-      chrome.runtime.sendMessage({ type: 'SUMMARIZE', text, title });
+      chrome.storage.local.get('bennunote_config', (data) => {
+        const maxTokens = (data.bennunote_config as Record<string, unknown>)?.maxTokens as number || 4096;
+        chrome.runtime.sendMessage({ type: 'SUMMARIZE', text, title, maxTokens }, (response) => {
+          if (chrome.runtime.lastError) {
+            p.setSummarizing(false);
+            p.log(`Summary failed: ${chrome.runtime.lastError.message}`, 'error');
+            return;
+          }
+          p.setSummarizing(false);
+          if (response?.success && response.summary) {
+            p.log('Summary generated!', 'success');
+            p.setSummary(response.summary);
+          } else {
+            p.log(`Summary failed: ${response?.error || 'Unknown error'}`, 'error');
+          }
+        });
+      });
     });
   }
   return panel;
@@ -62,26 +101,6 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
       } else {
         p.log(`Backend transcription failed: ${msg.error || 'no result'}`, 'error');
         p.log('Check the Python backend terminal for detailed error logs.', 'warn');
-      }
-    }
-    if (msg.type === 'WRITE_FEISHU_RESULT') {
-      const p = getPanel();
-      p.setFeishuSyncing(false);
-      if (msg.success && msg.docUrl) {
-        p.log('Feishu sync successful!', 'success');
-        p.showFeishuLink(msg.docUrl);
-      } else {
-        p.log(`Feishu sync failed: ${msg.error}`, 'error');
-      }
-    }
-    if (msg.type === 'SUMMARIZE_RESULT') {
-      const p = getPanel();
-      p.setSummarizing(false);
-      if (msg.success && msg.summary) {
-        p.log('Summary generated!', 'success');
-        p.setSummary(msg.summary);
-      } else {
-        p.log(`Summary failed: ${msg.error}`, 'error');
       }
     }
   } catch (err) {
