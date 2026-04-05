@@ -18,14 +18,17 @@ Content script changes require reloading the Bilibili tab as well.
 ## Architecture
 
 ```
-Popup (src/popup/)           → trigger button, sends EXTRACT_SUBTITLES
+Popup (src/popup/)           → trigger button, language select, sends EXTRACT_SUBTITLES
   ↓
 Background (src/background.ts) → message router between contexts
   ├→ Content Script (src/content/) → runs on bilibili.com/video/*
   │   ├ bilibili-api.ts  → video info extraction, subtitle/audio API calls
   │   ├ subtitle-panel.ts → Shadow DOM floating panel (Log + Subtitles tabs)
   │   └ index.ts          → orchestrates extraction flow
-  └→ Offscreen Document (src/offscreen/) → Whisper transcription via transformers.js
+  └→ Python Backend (server/) → localhost:2185, transcription + AI + Feishu
+      ├ /transcript  → Bcut ASR → Whisper fallback
+      ├ /summarize   → Claude AI summary
+      └ /write_feishu → Feishu doc sync
 ```
 
 Messages flow between contexts via `chrome.runtime.sendMessage`. Types are defined in `src/shared/messages.ts`.
@@ -47,17 +50,11 @@ Messages flow between contexts via `chrome.runtime.sendMessage`. Types are defin
 - Language dropdown appears when multiple subtitle tracks exist; switching triggers `loadTrack()`
 - Save button (header) downloads full log as timestamped `.txt` file
 
-### `src/offscreen/offscreen.ts`
-- Uses `@huggingface/transformers` with `Xenova/whisper-small` model
-- Runs in Offscreen Document (required for WASM in MV3)
-- `isModelCached()` checks Cache Storage before loading to show appropriate status message
-- Handles `PRELOAD_MODEL` message for background preloading on install/startup
-- Singleton pattern for the transcriber pipeline
-
 ### `src/background.ts`
-- Routes messages between popup, content script, and offscreen document
-- Tracks `activeTabId` to route Whisper results back to the correct tab
-- Triggers model preload on `chrome.runtime.onInstalled` and `chrome.runtime.onStartup`
+- Routes messages between popup, content script, and backend server
+- Tracks `activeTabId` to route results back to the correct tab
+- Handles `BACKEND_TRANSCRIBE` requests to proxy transcription to Python backend
+- Non-blocking backend health check on startup
 
 ## Log System
 
@@ -73,7 +70,6 @@ When debugging issues, ask the user to save and share the log file.
 ## Permissions
 
 - `activeTab` — access current tab for content script messaging
-- `offscreen` — create offscreen document for Whisper WASM
 - `storage` — persist logs to `chrome.storage.local`
 - `host_permissions`: `*.bilibili.com/*`, `*.hdslb.com/*` — API calls and audio/subtitle fetching
 
@@ -83,6 +79,7 @@ When debugging issues, ask the user to save and share the log file.
 
 ## Documentation
 
+- `SERVER.md` — 后端服务器文档：启动方式、Web 配置页面、API 端点、飞书权限、架构说明。
 - `Transcript.md` — 中文用户使用说明，覆盖安装配置、字幕提取流程、飞书同步、常见问题。面向终端用户。
 
 ## Conventions
