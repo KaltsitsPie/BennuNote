@@ -29,69 +29,82 @@ class TranscriptResponse(BaseModel):
 
 
 @router.post("/transcript", response_model=TranscriptResponse)
-async def transcript(req: TranscriptRequest):
+def transcript(req: TranscriptRequest):
     logger.info("Transcript request: bvid=%s, model_size=%s, language=%s", req.bvid, req.model_size, req.language)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        audio_path = os.path.join(tmpdir, "audio.m4a")
-        url = f"https://www.bilibili.com/video/{req.bvid}"
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audio_path = os.path.join(tmpdir, "audio.m4a")
+            url = f"https://www.bilibili.com/video/{req.bvid}"
 
-        cmd = [
-            "yt-dlp",
-            "-f", "ba",  # best audio
-            "-o", audio_path,
-            "--no-playlist",
-        ]
-        if req.cookie:
-            cookie_file = os.path.join(tmpdir, "cookies.txt")
-            with open(cookie_file, "w") as f:
-                f.write(req.cookie)
-            cmd.extend(["--cookies", cookie_file])
-        cmd.append(url)
+            cmd = [
+                "yt-dlp",
+                "-f", "ba",  # best audio
+                "-o", audio_path,
+                "--no-playlist",
+            ]
+            if req.cookie:
+                cookie_file = os.path.join(tmpdir, "cookies.txt")
+                with open(cookie_file, "w") as f:
+                    f.write(req.cookie)
+                cmd.extend(["--cookies", cookie_file])
+            cmd.append(url)
 
-        logger.info("Running yt-dlp: %s", " ".join(cmd))
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            logger.info("Running yt-dlp: %s", " ".join(cmd))
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            except FileNotFoundError:
+                logger.error("yt-dlp binary not found on PATH")
+                raise HTTPException(status_code=500, detail="yt-dlp is not installed. Run: pip install yt-dlp")
+            except subprocess.TimeoutExpired:
+                logger.error("yt-dlp timed out after 120s")
+                raise HTTPException(status_code=504, detail="yt-dlp timed out downloading audio")
 
-        if result.stdout:
-            logger.info("yt-dlp stdout:\n%s", result.stdout.strip())
-        if result.stderr:
-            logger.warning("yt-dlp stderr:\n%s", result.stderr.strip())
+            if result.stdout:
+                logger.info("yt-dlp stdout:\n%s", result.stdout.strip())
+            if result.stderr:
+                logger.warning("yt-dlp stderr:\n%s", result.stderr.strip())
 
-        if result.returncode != 0:
-            logger.error("yt-dlp failed with code %d", result.returncode)
-            raise HTTPException(status_code=500, detail=f"yt-dlp failed: {result.stderr[:500]}")
+            if result.returncode != 0:
+                logger.error("yt-dlp failed with code %d", result.returncode)
+                raise HTTPException(status_code=500, detail=f"yt-dlp failed: {result.stderr[:500]}")
 
-        if not os.path.exists(audio_path):
-            # yt-dlp may add extension automatically
-            candidates = [f for f in os.listdir(tmpdir) if f.startswith("audio")]
-            if candidates:
-                audio_path = os.path.join(tmpdir, candidates[0])
-                logger.info("Audio file found (auto-extension): %s", audio_path)
-            else:
-                logger.error("Audio file not found after download in %s", tmpdir)
-                raise HTTPException(status_code=500, detail="Audio file not found after download")
+            if not os.path.exists(audio_path):
+                # yt-dlp may add extension automatically
+                candidates = [f for f in os.listdir(tmpdir) if f.startswith("audio")]
+                if candidates:
+                    audio_path = os.path.join(tmpdir, candidates[0])
+                    logger.info("Audio file found (auto-extension): %s", audio_path)
+                else:
+                    logger.error("Audio file not found after download in %s", tmpdir)
+                    raise HTTPException(status_code=500, detail="Audio file not found after download")
 
-        file_size_mb = os.path.getsize(audio_path) / 1024 / 1024
-        logger.info("Audio downloaded: %s (%.1fMB)", audio_path, file_size_mb)
+            file_size_mb = os.path.getsize(audio_path) / 1024 / 1024
+            logger.info("Audio downloaded: %s (%.1fMB)", audio_path, file_size_mb)
 
-        # Try Bcut ASR first, fall back to Whisper
-        source = "bcut_asr"
-        try:
-            logger.info("Trying Bcut ASR...")
-            items = transcribe_via_bcut(audio_path)
-            logger.info("Bcut ASR succeeded: %d segments", len(items))
-        except (BcutASRError, Exception) as e:
-            logger.warning("Bcut ASR failed (%s), falling back to Whisper...", e)
-            source = "whisper"
-            items = transcribe_audio(audio_path, req.model_size, req.language)
+            # Try Bcut ASR first, fall back to Whisper
+            source = "bcut_asr"
+            try:
+                logger.info("Trying Bcut ASR...")
+                items = transcribe_via_bcut(audio_path)
+                logger.info("Bcut ASR succeeded: %d segments", len(items))
+            except (BcutASRError, Exception) as e:
+                logger.warning("Bcut ASR failed (%s), falling back to Whisper...", e)
+                source = "whisper"
+                items = transcribe_audio(audio_path, req.model_size, req.language)
 
-    full_text = "\n".join(item["content"] for item in items)
-    duration = items[-1]["to"] if items else 0.0
+        full_text = "\n".join(item["content"] for item in items)
+        duration = items[-1]["to"] if items else 0.0
 
-    logger.info("Returning %d segments (source=%s), duration=%.1fs", len(items), source, duration)
-    return TranscriptResponse(
-        text=full_text,
-        source=source,
-        duration=duration,
-        items=items,
-    )
+        logger.info("Returning %d segments (source=%s), duration=%.1fs", len(items), source, duration)
+        return TranscriptResponse(
+            text=full_text,
+            source=source,
+            duration=duration,
+            items=items,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Unexpected error in /transcript")
+        raise HTTPException(status_code=500, detail=str(e))

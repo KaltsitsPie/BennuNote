@@ -100,8 +100,8 @@ def transcribe_via_bcut(audio_path: str) -> list[dict]:
     logger.info("Step 4: Creating ASR task...")
     resp = requests.post(
         f"{API_BASE}/task",
-        headers=HEADERS,
-        data={
+        headers={**HEADERS, "Content-Type": "application/json"},
+        json={
             "resource": download_url,
             "model_id": MODEL_ID,
         },
