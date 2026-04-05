@@ -25,12 +25,6 @@ export interface SubtitleTrack {
   subtitle_url: string;
 }
 
-export interface WhisperProgress {
-  status: 'loading-model' | 'transcribing' | 'done' | 'error';
-  progress?: number;
-  message?: string;
-}
-
 export interface BennuNoteConfig {
   feishuMode: 'append' | 'new';
   feishuDocToken: string;
@@ -39,6 +33,7 @@ export interface BennuNoteConfig {
   feishuAppSecret: string;
   bilibiliCookie: string;
   whisperModelSize: 'tiny' | 'base' | 'small' | 'medium' | 'large';
+  claudeSetupToken: string;
 }
 
 export const DEFAULT_CONFIG: BennuNoteConfig = {
@@ -49,4 +44,5 @@ export const DEFAULT_CONFIG: BennuNoteConfig = {
   feishuAppSecret: '',
   bilibiliCookie: '',
   whisperModelSize: 'small',
+  claudeSetupToken: '',
 };

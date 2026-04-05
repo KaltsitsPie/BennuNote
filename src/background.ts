@@ -1,19 +1,8 @@
 import type { Message } from './shared/messages';
+import type { BennuNoteConfig } from './shared/types';
+import { DEFAULT_CONFIG } from './shared/types';
 
-async function ensureOffscreenDocument() {
-  const existingContexts = await chrome.runtime.getContexts({
-    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-  });
-  if (existingContexts.length > 0) return;
-
-  await chrome.offscreen.createDocument({
-    url: 'src/offscreen/offscreen.html',
-    reasons: [chrome.offscreen.Reason.WORKERS],
-    justification: 'Whisper speech-to-text transcription',
-  });
-}
-
-// Track which tab initiated the transcription so we can route results back
+// Track which tab initiated so we can route results back
 let activeTabId: number | null = null;
 
 chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
@@ -34,54 +23,71 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     return false;
   }
 
-  // Content script → fetch audio in background (has host_permissions) → forward to offscreen
-  if (msg.type === 'TRANSCRIBE_AUDIO') {
-    if (sender.tab?.id) {
-      activeTabId = sender.tab.id;
-    }
-    const notifyProgress = (status: string, message: string) => {
-      if (activeTabId) {
-        chrome.tabs.sendMessage(activeTabId, {
-          type: 'TRANSCRIBE_PROGRESS',
-          progress: { status, message },
-        }, () => { void chrome.runtime.lastError; });
-      }
-    };
+  // Content script → Backend: request transcription (Bcut ASR → Whisper fallback)
+  if (msg.type === 'TRANSCRIPT_REQUEST') {
+    const tabId = sender.tab?.id || activeTabId;
+    console.log(`[BennuNote BG] TRANSCRIPT_REQUEST received: bvid=${msg.bvid}, language=${msg.language}, tabId=${tabId}`);
 
     (async () => {
       try {
-        // Fetch audio from CDN (background has host_permissions, no CORS)
-        notifyProgress('transcribing', 'Downloading audio from CDN...');
-        const resp = await fetch(msg.audioUrl, {
-          headers: { 'Referer': 'https://www.bilibili.com/' },
-        });
-        if (!resp.ok) {
-          notifyProgress('error', `Audio download failed: HTTP ${resp.status}`);
-          return;
-        }
-        const buffer = await resp.arrayBuffer();
-        const sizeMB = (buffer.byteLength / 1024 / 1024).toFixed(1);
-        notifyProgress('transcribing', `Audio downloaded: ${sizeMB} MB. Encoding...`);
+        const configData = await chrome.storage.local.get('bennunote_config');
+        const config: BennuNoteConfig = { ...DEFAULT_CONFIG, ...(configData.bennunote_config as Partial<BennuNoteConfig> | undefined) };
 
-        // Convert to base64
-        const uint8 = new Uint8Array(buffer);
-        let binary = '';
-        const chunkSize = 32768;
-        for (let i = 0; i < uint8.length; i += chunkSize) {
-          const slice = uint8.subarray(i, i + chunkSize);
-          for (let j = 0; j < slice.length; j++) {
-            binary += String.fromCharCode(slice[j]);
+        const requestBody = {
+          bvid: msg.bvid,
+          model_size: config.whisperModelSize || 'small',
+          cookie: config.bilibiliCookie || '',
+          language: msg.language,
+        };
+        console.log(`[BennuNote BG] POST /transcript body:`, JSON.stringify(requestBody));
+
+        const startTime = Date.now();
+        const resp = await fetch('http://localhost:2185/transcript', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        console.log(`[BennuNote BG] /transcript response: HTTP ${resp.status} (${elapsed}s)`);
+        const data = await resp.json();
+        console.log(`[BennuNote BG] /transcript data: source=${data.source}, items=${data.items?.length}, duration=${data.duration}`);
+
+        if (resp.ok && data.items) {
+          console.log(`[BennuNote BG] /transcript success: ${data.items.length} segments, source=${data.source}`);
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'TRANSCRIPT_RESULT',
+              result: {
+                source: data.source === 'bcut_asr' ? 'ai' : 'whisper',
+                items: data.items,
+                language: msg.language,
+              },
+            }, () => { void chrome.runtime.lastError; });
+            console.log(`[BennuNote BG] TRANSCRIPT_RESULT sent to tab ${tabId}`);
+          } else {
+            console.error('[BennuNote BG] No tabId to send TRANSCRIPT_RESULT to!');
+          }
+        } else {
+          const detail = data.detail || 'Unknown error';
+          console.error(`[BennuNote BG] /transcript failed:`, detail);
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'TRANSCRIPT_RESULT',
+              result: null,
+              error: typeof detail === 'string' ? detail : JSON.stringify(detail),
+            }, () => { void chrome.runtime.lastError; });
           }
         }
-        const audioBase64 = btoa(binary);
-        notifyProgress('transcribing', `Sending ${(audioBase64.length / 1024 / 1024).toFixed(1)} MB to Whisper...`);
-
-        // Ensure offscreen document exists and forward
-        await ensureOffscreenDocument();
-        chrome.runtime.sendMessage({ type: 'TRANSCRIBE_AUDIO_DATA', audioBase64 });
       } catch (err) {
-        console.error('[BennuNote BG] audio fetch/forward failed:', err);
-        notifyProgress('error', `Audio fetch error: ${err}`);
+        console.error('[BennuNote BG] /transcript request error:', err);
+        if (tabId) {
+          chrome.tabs.sendMessage(tabId, {
+            type: 'TRANSCRIPT_RESULT',
+            result: null,
+            error: `Backend request failed: ${err}`,
+          }, () => { void chrome.runtime.lastError; });
+        }
       }
     })();
 
@@ -89,20 +95,113 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
     return false;
   }
 
-  // Offscreen → forward progress/result back to the content script tab
-  if (msg.type === 'TRANSCRIBE_PROGRESS' || msg.type === 'TRANSCRIBE_RESULT') {
-    if (activeTabId) {
-      chrome.tabs.sendMessage(activeTabId, msg, () => {
-        // Ignore errors if tab is closed
-        void chrome.runtime.lastError;
-      });
-    }
+  // Content script → Backend: write to Feishu
+  if (msg.type === 'WRITE_FEISHU') {
+    const tabId = sender.tab?.id || activeTabId;
+
+    (async () => {
+      try {
+        const configData = await chrome.storage.local.get('bennunote_config');
+        const config: BennuNoteConfig = { ...DEFAULT_CONFIG, ...(configData.bennunote_config as Partial<BennuNoteConfig> | undefined) };
+
+        const resp = await fetch('http://localhost:2185/write_feishu', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: msg.text,
+            title: msg.title,
+            mode: config.feishuMode || 'new',
+            doc_token: config.feishuDocToken || '',
+            folder_token: config.feishuFolderToken || '',
+            app_id: config.feishuAppId || '',
+            app_secret: config.feishuAppSecret || '',
+          }),
+        });
+
+        const data = await resp.json();
+        if (resp.ok && data.doc_url) {
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'WRITE_FEISHU_RESULT',
+              success: true,
+              docUrl: data.doc_url,
+            });
+          }
+        } else {
+          const detail = data.detail || 'Unknown error';
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'WRITE_FEISHU_RESULT',
+              success: false,
+              error: detail,
+            });
+          }
+        }
+      } catch (err) {
+        if (tabId) {
+          chrome.tabs.sendMessage(tabId, {
+            type: 'WRITE_FEISHU_RESULT',
+            success: false,
+            error: `${err}`,
+          });
+        }
+      }
+    })();
+
+    sendResponse({ ok: true });
     return false;
   }
 
-  // Preload result from offscreen — just log it
-  if (msg.type === 'PRELOAD_RESULT') {
-    console.log(`[BennuNote] Preload result: success=${msg.success}, cached=${msg.cached}`);
+  // Content script → Backend: summarize subtitles with Claude AI
+  if (msg.type === 'SUMMARIZE') {
+    const tabId = sender.tab?.id || activeTabId;
+
+    (async () => {
+      try {
+        const configData = await chrome.storage.local.get('bennunote_config');
+        const config: BennuNoteConfig = { ...DEFAULT_CONFIG, ...(configData.bennunote_config as Partial<BennuNoteConfig> | undefined) };
+
+        const resp = await fetch('http://localhost:2185/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: msg.text,
+            title: msg.title,
+            setup_token: config.claudeSetupToken || '',
+          }),
+        });
+
+        const data = await resp.json();
+        if (resp.ok && data.summary) {
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'SUMMARIZE_RESULT',
+              success: true,
+              summary: data.summary,
+            });
+          }
+        } else {
+          const detail = data.detail || 'Unknown error';
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'SUMMARIZE_RESULT',
+              success: false,
+              error: typeof detail === 'string' ? detail : JSON.stringify(detail),
+            });
+          }
+        }
+      } catch (err) {
+        if (tabId) {
+          chrome.tabs.sendMessage(tabId, {
+            type: 'SUMMARIZE_RESULT',
+            success: false,
+            error: `${err}`,
+          });
+        }
+      }
+    })();
+
+    sendResponse({ ok: true });
     return false;
   }
 
@@ -130,28 +229,4 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
   }
 
   return false;
-});
-
-// Preload Whisper model on install and browser startup
-async function preloadModel() {
-  try {
-    await ensureOffscreenDocument();
-    chrome.runtime.sendMessage({ type: 'PRELOAD_MODEL' }, () => {
-      // Ignore errors if offscreen not ready yet
-      void chrome.runtime.lastError;
-    });
-    console.log('[BennuNote] Preload request sent to offscreen document');
-  } catch (err) {
-    console.warn('[BennuNote] Preload failed:', err);
-  }
-}
-
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('[BennuNote] Extension installed, preloading Whisper model...');
-  preloadModel();
-});
-
-chrome.runtime.onStartup.addListener(() => {
-  console.log('[BennuNote] Browser started, preloading Whisper model...');
-  preloadModel();
 });

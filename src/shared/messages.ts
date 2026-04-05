@@ -1,8 +1,9 @@
-import type { SubtitleResult, WhisperProgress } from './types';
+import type { SubtitleResult } from './types';
 
 // Popup → Background → Content Script
 export interface ExtractRequest {
   type: 'EXTRACT_SUBTITLES';
+  language: string;
 }
 
 // Content Script → Background
@@ -12,54 +13,18 @@ export interface SubtitleApiResult {
   videoInfo: { bvid: string; cid: number; title: string };
 }
 
-// Content Script → Background: fetch audio and forward to offscreen
-export interface TranscribeRequest {
-  type: 'TRANSCRIBE_AUDIO';
-  audioUrl: string;
+// Content Script → Background: request backend transcription
+export interface TranscriptRequest {
+  type: 'TRANSCRIPT_REQUEST';
   bvid: string;
-  cid: number;
+  language: string;
 }
 
-// Background → Offscreen: audio data ready for transcription
-export interface TranscribeAudioData {
-  type: 'TRANSCRIBE_AUDIO_DATA';
-  audioBase64: string;
-}
-
-// Offscreen → Background → Content Script
-export interface TranscribeProgress {
-  type: 'TRANSCRIBE_PROGRESS';
-  progress: WhisperProgress;
-}
-
-export interface TranscribeResult {
-  type: 'TRANSCRIBE_RESULT';
+// Background → Content Script: backend transcription result
+export interface TranscriptResult {
+  type: 'TRANSCRIPT_RESULT';
   result: SubtitleResult | null;
   error?: string;
-}
-
-// Content Script → Background (request audio URL)
-export interface AudioUrlRequest {
-  type: 'GET_AUDIO_URL';
-  bvid: string;
-  cid: number;
-}
-
-export interface AudioUrlResponse {
-  type: 'AUDIO_URL_RESPONSE';
-  url: string | null;
-}
-
-// Background → Offscreen: preload Whisper model
-export interface PreloadModelRequest {
-  type: 'PRELOAD_MODEL';
-}
-
-// Offscreen → Background: preload result
-export interface PreloadModelResult {
-  type: 'PRELOAD_RESULT';
-  success: boolean;
-  cached: boolean;
 }
 
 // Content Script → Background: auto-save log file
@@ -69,15 +34,43 @@ export interface SaveLogRequest {
   filename: string;
 }
 
+// Content Script → Background: write subtitles to Feishu
+export interface WriteFeishuRequest {
+  type: 'WRITE_FEISHU';
+  text: string;
+  title: string;
+}
+
+// Background → Content Script: Feishu write result
+export interface WriteFeishuResult {
+  type: 'WRITE_FEISHU_RESULT';
+  success: boolean;
+  docUrl?: string;
+  error?: string;
+}
+
+// Content Script → Background: request AI summary
+export interface SummarizeRequest {
+  type: 'SUMMARIZE';
+  text: string;
+  title: string;
+}
+
+// Background → Content Script: summary result
+export interface SummarizeResult {
+  type: 'SUMMARIZE_RESULT';
+  success: boolean;
+  summary?: string;
+  error?: string;
+}
+
 export type Message =
   | ExtractRequest
   | SubtitleApiResult
-  | TranscribeRequest
-  | TranscribeProgress
-  | TranscribeResult
-  | AudioUrlRequest
-  | AudioUrlResponse
-  | PreloadModelRequest
-  | PreloadModelResult
+  | TranscriptRequest
+  | TranscriptResult
   | SaveLogRequest
-  | TranscribeAudioData;
+  | WriteFeishuRequest
+  | WriteFeishuResult
+  | SummarizeRequest
+  | SummarizeResult;

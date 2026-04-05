@@ -1,7 +1,15 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import health, transcript, feishu
+from routers import health, transcript, feishu, summarize
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 app = FastAPI(title="BennuNote Backend")
 
@@ -17,6 +25,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(transcript.router)
 app.include_router(feishu.router)
+app.include_router(summarize.router)
 
 if __name__ == "__main__":
     import uvicorn

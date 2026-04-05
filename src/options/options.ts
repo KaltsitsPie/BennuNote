@@ -9,6 +9,7 @@ const ids = {
   folderToken: 'feishu-folder-token',
   cookie: 'bilibili-cookie',
   whisper: 'whisper-model',
+  claudeToken: 'claude-setup-token',
 } as const;
 
 function el<T extends HTMLElement>(id: string): T {
@@ -33,6 +34,7 @@ chrome.storage.local.get('bennunote_config', (data) => {
   el<HTMLInputElement>(ids.folderToken).value = config.feishuFolderToken;
   el<HTMLTextAreaElement>(ids.cookie).value = config.bilibiliCookie;
   el<HTMLSelectElement>(ids.whisper).value = config.whisperModelSize;
+  el<HTMLInputElement>(ids.claudeToken).value = config.claudeSetupToken;
   updateConditional();
 });
 
@@ -48,6 +50,7 @@ el<HTMLButtonElement>('save-btn').addEventListener('click', () => {
     feishuFolderToken: el<HTMLInputElement>(ids.folderToken).value.trim(),
     bilibiliCookie: el<HTMLTextAreaElement>(ids.cookie).value.trim(),
     whisperModelSize: el<HTMLSelectElement>(ids.whisper).value as BennuNoteConfig['whisperModelSize'],
+    claudeSetupToken: el<HTMLInputElement>(ids.claudeToken).value.trim(),
   };
   chrome.storage.local.set({ bennunote_config: config }, () => {
     const toast = document.getElementById('toast')!;

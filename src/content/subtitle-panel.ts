@@ -1,4 +1,4 @@
-import type { SubtitleItem, SubtitleSource, SubtitleTrack, WhisperProgress } from '../shared/types';
+import type { SubtitleItem, SubtitleSource, SubtitleTrack } from '../shared/types';
 import cssText from './subtitle-panel.css?inline';
 
 type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'step';
@@ -28,22 +28,29 @@ export class SubtitlePanel {
   private panelEl!: HTMLElement;
   private logEl!: HTMLElement;
   private listEl!: HTMLElement;
-  private progressBar!: HTMLElement;
-  private progressFill!: HTMLElement;
   private sourceBadge!: HTMLElement;
   private footerEl!: HTMLElement;
   private emptyEl!: HTMLElement;
   private tabSubtitle!: HTMLElement;
   private tabLog!: HTMLElement;
+  private tabSummary!: HTMLElement;
   private contentSubtitle!: HTMLElement;
   private contentLog!: HTMLElement;
+  private contentSummary!: HTMLElement;
+  private summaryEmptyEl!: HTMLElement;
+  private summaryLoadingEl!: HTMLElement;
+  private summaryTextEl!: HTMLElement;
+  private summaryActionsEl!: HTMLElement;
   private langSelect!: HTMLSelectElement;
   private langBar!: HTMLElement;
   private items: SubtitleItem[] = [];
   private onTrackChange: ((track: SubtitleTrack) => void) | null = null;
   private logLines: string[] = [];
-  private lastProgressMilestone: number = -1;
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private feishuLink!: HTMLElement;
+  private feishuUrl!: HTMLAnchorElement;
+  private onSyncFeishu: (() => void) | null = null;
+  private onSummarize: (() => void) | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -65,8 +72,10 @@ export class SubtitlePanel {
         <div style="display:flex;align-items:center">
           <span class="bennu-title">BennuNote</span>
           <span class="bennu-source-badge" style="display:none"></span>
+          <span class="bennu-status-dot" title="Checking service..."></span>
         </div>
         <div class="bennu-header-actions">
+          <button class="bennu-btn" data-action="settings" title="Settings">&#x2699;</button>
           <button class="bennu-btn" data-action="save-log" title="Save log">&#x1f4be;</button>
           <button class="bennu-btn bennu-close-btn" data-action="close">&times;</button>
         </div>
@@ -74,9 +83,7 @@ export class SubtitlePanel {
       <div class="bennu-tabs">
         <button class="bennu-tab" data-tab="log">Log</button>
         <button class="bennu-tab" data-tab="subtitle">Subtitles</button>
-      </div>
-      <div class="bennu-progress-bar" style="display:none">
-        <div class="bennu-progress-fill" style="width:0%"></div>
+        <button class="bennu-tab" data-tab="summary">Summary</button>
       </div>
       <div class="bennu-tab-content" data-content="log">
         <div class="bennu-log"></div>
@@ -89,10 +96,23 @@ export class SubtitlePanel {
         <div class="bennu-empty">No subtitles yet. Click extract to start.</div>
         <div class="bennu-subtitle-list" style="display:none"></div>
       </div>
+      <div class="bennu-tab-content" data-content="summary">
+        <div class="bennu-summary-empty">Extract subtitles first, then click Summarize.<br><small>Requires Claude Setup Token in Settings.</small></div>
+        <div class="bennu-summary-loading" style="display:none">Generating summary...</div>
+        <div class="bennu-summary-text" style="display:none"></div>
+        <div class="bennu-summary-actions" style="display:none">
+          <button class="bennu-btn" data-action="summarize">Summarize</button>
+          <button class="bennu-btn" data-action="copy-summary" style="display:none">Copy Summary</button>
+        </div>
+      </div>
       <div class="bennu-footer" style="display:none">
         <button class="bennu-btn" data-action="copy">Copy Text</button>
         <button class="bennu-btn" data-action="download-txt">TXT</button>
         <button class="bennu-btn" data-action="download-srt">SRT</button>
+        <button class="bennu-btn bennu-feishu-btn" data-action="sync-feishu">Sync to Feishu</button>
+      </div>
+      <div class="bennu-feishu-link" style="display:none">
+        <a class="bennu-feishu-url" href="#" target="_blank">Open in Feishu</a>
       </div>
     `;
 
@@ -101,18 +121,24 @@ export class SubtitlePanel {
 
     this.logEl = panel.querySelector('.bennu-log')!;
     this.listEl = panel.querySelector('.bennu-subtitle-list')!;
-    this.progressBar = panel.querySelector('.bennu-progress-bar')!;
-    this.progressFill = panel.querySelector('.bennu-progress-fill')!;
     this.sourceBadge = panel.querySelector('.bennu-source-badge')!;
     this.footerEl = panel.querySelector('.bennu-footer')!;
     this.emptyEl = panel.querySelector('.bennu-empty')!;
 
     this.tabLog = panel.querySelector('[data-tab="log"]')!;
     this.tabSubtitle = panel.querySelector('[data-tab="subtitle"]')!;
+    this.tabSummary = panel.querySelector('[data-tab="summary"]')!;
     this.contentLog = panel.querySelector('[data-content="log"]')!;
     this.contentSubtitle = panel.querySelector('[data-content="subtitle"]')!;
+    this.contentSummary = panel.querySelector('[data-content="summary"]')!;
+    this.summaryEmptyEl = panel.querySelector('.bennu-summary-empty')!;
+    this.summaryLoadingEl = panel.querySelector('.bennu-summary-loading')!;
+    this.summaryTextEl = panel.querySelector('.bennu-summary-text')!;
+    this.summaryActionsEl = panel.querySelector('.bennu-summary-actions')!;
     this.langSelect = panel.querySelector('.bennu-lang-select')!;
     this.langBar = panel.querySelector('.bennu-lang-bar')!;
+    this.feishuLink = panel.querySelector('.bennu-feishu-link')!;
+    this.feishuUrl = panel.querySelector('.bennu-feishu-url')!;
 
     // Language change handler
     this.langSelect.addEventListener('change', () => {
@@ -133,7 +159,7 @@ export class SubtitlePanel {
       // Tab switching
       const tab = target.closest('[data-tab]')?.getAttribute('data-tab');
       if (tab) {
-        this.switchTab(tab as 'log' | 'subtitle');
+        this.switchTab(tab as 'log' | 'subtitle' | 'summary');
         return;
       }
 
@@ -143,6 +169,10 @@ export class SubtitlePanel {
       else if (action === 'copy') this.copyText();
       else if (action === 'download-txt') this.downloadTxt();
       else if (action === 'download-srt') this.downloadSrt();
+      else if (action === 'sync-feishu') this.onSyncFeishu?.();
+      else if (action === 'settings') chrome.runtime.openOptionsPage();
+      else if (action === 'summarize') this.onSummarize?.();
+      else if (action === 'copy-summary') this.copySummary();
 
       const item = target.closest('.bennu-subtitle-item') as HTMLElement | null;
       if (item?.dataset.time) {
@@ -151,11 +181,13 @@ export class SubtitlePanel {
     });
   }
 
-  private switchTab(tab: 'log' | 'subtitle') {
+  private switchTab(tab: 'log' | 'subtitle' | 'summary') {
     this.tabLog.classList.toggle('active', tab === 'log');
     this.tabSubtitle.classList.toggle('active', tab === 'subtitle');
+    this.tabSummary.classList.toggle('active', tab === 'summary');
     this.contentLog.classList.toggle('active', tab === 'log');
     this.contentSubtitle.classList.toggle('active', tab === 'subtitle');
+    this.contentSummary.classList.toggle('active', tab === 'summary');
     // Show footer only when subtitle tab is active and has items
     this.footerEl.style.display = (tab === 'subtitle' && this.items.length > 0) ? '' : 'none';
   }
@@ -233,37 +265,6 @@ export class SubtitlePanel {
     this.log('Log saved to file', 'success');
   }
 
-  setProgress(progress: WhisperProgress) {
-    const pctRaw = progress.progress || 0;
-    const milestone = Math.floor(pctRaw / 10) * 10;
-
-    if (progress.status === 'loading-model') {
-      // Only log at 10% milestones
-      if (milestone > this.lastProgressMilestone || pctRaw === 0) {
-        this.lastProgressMilestone = milestone;
-        const label = progress.message || 'Loading Whisper model...';
-        this.log(`${label} ${milestone}%`, 'info');
-      }
-      this.progressBar.style.display = '';
-      this.progressFill.style.width = `${pctRaw}%`;
-    } else if (progress.status === 'transcribing') {
-      if (milestone > this.lastProgressMilestone || pctRaw === 0) {
-        this.lastProgressMilestone = milestone;
-        this.log(`Transcribing: ${milestone}%`, 'info');
-      }
-      this.progressBar.style.display = '';
-      this.progressFill.style.width = `${pctRaw}%`;
-    } else if (progress.status === 'error') {
-      this.lastProgressMilestone = -1;
-      this.log(`Whisper error: ${progress.message || 'unknown'}`, 'error');
-      this.progressBar.style.display = 'none';
-    } else if (progress.status === 'done') {
-      this.lastProgressMilestone = -1;
-      this.log('Whisper transcription complete', 'success');
-      this.progressBar.style.display = 'none';
-    }
-  }
-
   /**
    * Populate the language dropdown with available tracks.
    * Highlights the currently active track.
@@ -308,8 +309,81 @@ export class SubtitlePanel {
 
     this.log(`Loaded ${items.length} subtitle entries (${sourceLabels[source]})`, 'success');
 
+    // Show summarize button and reset previous summary
+    this.showSummarizeButton();
+
     // Auto-switch to subtitle tab
     this.switchTab('subtitle');
+  }
+
+  private showSummarizeButton() {
+    this.summaryEmptyEl.style.display = 'none';
+    this.summaryLoadingEl.style.display = 'none';
+    this.summaryTextEl.style.display = 'none';
+    this.summaryTextEl.innerHTML = '';
+    this.summaryActionsEl.style.display = '';
+    const summarizeBtn = this.summaryActionsEl.querySelector('[data-action="summarize"]') as HTMLElement;
+    const copyBtn = this.summaryActionsEl.querySelector('[data-action="copy-summary"]') as HTMLElement;
+    if (summarizeBtn) {
+      summarizeBtn.style.display = '';
+      (summarizeBtn as HTMLButtonElement).disabled = false;
+      summarizeBtn.textContent = 'Summarize';
+    }
+    if (copyBtn) copyBtn.style.display = 'none';
+  }
+
+  setSummarizeHandler(handler: () => void) {
+    this.onSummarize = handler;
+  }
+
+  setSummarizing(loading: boolean) {
+    const summarizeBtn = this.summaryActionsEl.querySelector('[data-action="summarize"]') as HTMLButtonElement;
+    if (loading) {
+      this.summaryEmptyEl.style.display = 'none';
+      this.summaryTextEl.style.display = 'none';
+      this.summaryLoadingEl.style.display = '';
+      if (summarizeBtn) {
+        summarizeBtn.disabled = true;
+        summarizeBtn.textContent = 'Summarizing...';
+      }
+    } else {
+      this.summaryLoadingEl.style.display = 'none';
+      if (summarizeBtn) {
+        summarizeBtn.disabled = false;
+        summarizeBtn.textContent = 'Summarize';
+      }
+    }
+  }
+
+  setSummary(text: string) {
+    this.summaryLoadingEl.style.display = 'none';
+    this.summaryEmptyEl.style.display = 'none';
+    this.summaryTextEl.style.display = '';
+    this.summaryTextEl.innerHTML = text
+      .split('\n\n')
+      .map((p) => `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+
+    // Show copy button, hide summarize button
+    const summarizeBtn = this.summaryActionsEl.querySelector('[data-action="summarize"]') as HTMLElement;
+    const copyBtn = this.summaryActionsEl.querySelector('[data-action="copy-summary"]') as HTMLElement;
+    if (summarizeBtn) summarizeBtn.style.display = 'none';
+    if (copyBtn) copyBtn.style.display = '';
+    this.summaryActionsEl.style.display = '';
+
+    // Auto-switch to summary tab
+    this.switchTab('summary');
+  }
+
+  private copySummary() {
+    const text = this.summaryTextEl.innerText;
+    navigator.clipboard.writeText(text);
+    const copyBtn = this.summaryActionsEl.querySelector('[data-action="copy-summary"]') as HTMLElement;
+    if (copyBtn) {
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => (copyBtn.textContent = orig), 1500);
+    }
   }
 
   private escapeHtml(text: string): string {
@@ -361,6 +435,32 @@ export class SubtitlePanel {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  setServiceStatus(online: boolean) {
+    const dot = this.shadow.querySelector('.bennu-status-dot') as HTMLElement;
+    if (dot) {
+      dot.style.background = online ? '#4caf50' : '#f44336';
+      dot.title = online ? 'Backend online' : 'Backend offline';
+    }
+  }
+
+  setSyncHandler(handler: () => void) {
+    this.onSyncFeishu = handler;
+  }
+
+  showFeishuLink(url: string) {
+    this.feishuUrl.href = url;
+    this.feishuUrl.textContent = 'Open in Feishu →';
+    this.feishuLink.style.display = '';
+  }
+
+  setFeishuSyncing(syncing: boolean) {
+    const btn = this.shadow.querySelector('.bennu-feishu-btn') as HTMLButtonElement;
+    if (btn) {
+      btn.textContent = syncing ? 'Syncing...' : 'Sync to Feishu';
+      btn.disabled = syncing;
+    }
   }
 
   destroy() {

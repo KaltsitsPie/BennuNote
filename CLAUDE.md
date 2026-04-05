@@ -77,6 +77,14 @@ When debugging issues, ask the user to save and share the log file.
 - `storage` — persist logs to `chrome.storage.local`
 - `host_permissions`: `*.bilibili.com/*`, `*.hdslb.com/*` — API calls and audio/subtitle fetching
 
+## Workflow
+
+- Do NOT `git add` or `git commit` after writing code. Leave changes in the working tree for human review before committing.
+
+## Documentation
+
+- `Transcript.md` — 中文用户使用说明，覆盖安装配置、字幕提取流程、飞书同步、常见问题。面向终端用户。
+
 ## Conventions
 
 - TypeScript strict mode, no `any` except for the transformers.js pipeline instance

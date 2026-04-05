@@ -265,38 +265,3 @@ export async function loadTrack(track: SubtitleTrack): Promise<SubtitleResult> {
   return { source, items, language: track.lan_doc };
 }
 
-export interface FetchAudioDebug {
-  apiUrl: string;
-  responseCode?: number;
-  streamCount: number;
-  chosenBandwidth?: number;
-  rawResponse?: unknown;
-}
-
-export async function fetchAudioUrl(
-  bvid: string,
-  cid: number
-): Promise<{ url: string | null; debug: FetchAudioDebug }> {
-  const apiUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&fnval=4048&fnver=0&fourk=1`;
-  const debug: FetchAudioDebug = { apiUrl, streamCount: 0 };
-
-  const resp = await fetch(apiUrl, { credentials: 'include' });
-  debug.responseCode = resp.status;
-  const data = await resp.json();
-  debug.rawResponse = { code: data?.code, message: data?.message };
-
-  const audioStreams = data?.data?.dash?.audio;
-  if (!audioStreams || audioStreams.length === 0) {
-    return { url: null, debug };
-  }
-
-  debug.streamCount = audioStreams.length;
-
-  // Pick lowest quality (smallest file, faster download)
-  const sorted = [...audioStreams].sort(
-    (a: { bandwidth: number }, b: { bandwidth: number }) => a.bandwidth - b.bandwidth
-  );
-  debug.chosenBandwidth = sorted[0].bandwidth;
-  const url = sorted[0].baseUrl || sorted[0].base_url || null;
-  return { url, debug };
-}
