@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BennuNote Setup</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --orange: #d29922; --red: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.6; padding: 2rem; max-width: 780px; margin: 0 auto;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.3rem; }
+  .subtitle { color: var(--text-dim); margin-bottom: 2rem; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;
+  }
+  .card h2 { font-size: 1.15rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0;
+  }
+  .status-dot.ok { background: var(--green); }
+  .status-dot.missing { background: var(--orange); }
+
+  label { display: block; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.3rem; margin-top: 0.8rem; }
+  label:first-of-type { margin-top: 0; }
+  input, select {
+    width: 100%; padding: 0.55rem 0.75rem; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    font-size: 0.9rem; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input::placeholder { color: #484f58; }
+
+  .row { display: flex; gap: 1rem; }
+  .row > * { flex: 1; }
+
+  button {
+    padding: 0.55rem 1.2rem; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--accent); color: #fff; font-size: 0.9rem; cursor: pointer;
+    font-weight: 500; margin-top: 1rem;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: transparent; color: var(--accent); }
+
+  .toast {
+    position: fixed; top: 1.5rem; right: 1.5rem; padding: 0.7rem 1.2rem;
+    border-radius: 6px; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .toast.success { background: #1a3a2a; border: 1px solid var(--green); color: var(--green); }
+  .toast.error { background: #3a1a1a; border: 1px solid var(--red); color: var(--red); }
+
+  details { margin-top: 1rem; }
+  summary {
+    cursor: pointer; color: var(--accent); font-size: 0.9rem;
+    user-select: none; padding: 0.3rem 0;
+  }
+  .guide {
+    margin-top: 0.7rem; padding: 1rem; background: var(--bg);
+    border-radius: 6px; font-size: 0.85rem; line-height: 1.7;
+  }
+  .guide ol { padding-left: 1.3rem; }
+  .guide li { margin-bottom: 0.4rem; }
+  .guide a { color: var(--accent); text-decoration: none; }
+  .guide a:hover { text-decoration: underline; }
+
+  .scope-box {
+    background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.75rem 1rem; margin: 0.7rem 0; font-family: monospace;
+    font-size: 0.78rem; line-height: 1.8; white-space: pre-wrap;
+    max-height: 200px; overflow-y: auto; position: relative;
+  }
+  .copy-btn {
+    position: absolute; top: 0.4rem; right: 0.4rem; padding: 0.2rem 0.6rem;
+    font-size: 0.75rem; margin-top: 0; background: var(--surface);
+    color: var(--text-dim); border: 1px solid var(--border);
+  }
+  .copy-btn:hover { color: var(--text); }
+  .scope-box-wrapper { position: relative; }
+
+  .cmd {
+    display: inline-block; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0.15rem 0.5rem; font-family: monospace; font-size: 0.82rem;
+  }
+
+  .provider-tabs {
+    display: flex; gap: 0; border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden; margin-bottom: 1rem;
+  }
+  .provider-tab {
+    flex: 1; padding: 0.45rem 0.3rem; text-align: center; font-size: 0.78rem;
+    background: transparent; color: var(--text-dim); border: none; border-right: 1px solid var(--border);
+    cursor: pointer; margin: 0; font-weight: 400; border-radius: 0;
+  }
+  .provider-tab:last-child { border-right: none; }
+  .provider-tab:hover { background: rgba(88,166,255,0.08); }
+  .provider-tab.active { background: rgba(88,166,255,0.15); color: var(--accent); font-weight: 500; }
+  .provider-panel { display: none; }
+  .provider-panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<h1>BennuNote Server Setup</h1>
+<p class="subtitle">Configure your Feishu and Claude credentials to enable all features.</p>
+
+<!-- Feishu Card -->
+<div class="card" id="feishu-card">
+  <h2><span class="status-dot missing" id="feishu-dot"></span> Feishu (Lark) App</h2>
+  <div class="row">
+    <div>
+      <label for="feishu_app_id">App ID</label>
+      <input id="feishu_app_id" placeholder="cli_xxxxxxxxxxxxxxxx">
+    </div>
+    <div>
+      <label for="feishu_app_secret">App Secret</label>
+      <input id="feishu_app_secret" type="password" placeholder="Paste your app secret">
+    </div>
+  </div>
+
+  <details>
+    <summary>How to create a Feishu app with the right permissions</summary>
+    <div class="guide">
+      <ol>
+        <li>Go to <a href="https://open.feishu.cn/app" target="_blank">Feishu Open Platform</a> and create a new app (or use an existing one).</li>
+        <li>In the app dashboard, go to <strong>Permissions & Scopes</strong>.</li>
+        <li>Add the following scopes (copy all at once and batch-add):</li>
+      </ol>
+      <div class="scope-box-wrapper">
+        <div class="scope-box" id="scope-list">docx:document:create
+docx:document:readonly
+docx:document:write_only
+docs:document.content:read
+docs:document:copy
+docs:document:export
+docs:document:import
+docs:document.media:download
+docs:document.media:upload
+docs:document.comment:create
+docs:document.comment:read
+docs:document.comment:update
+docs:document.comment:delete
+docs:document.comment:write_only
+docs:event:subscribe
+docs:permission.member:auth
+docs:permission.member:create
+docs:permission.member:transfer
+drive:drive.metadata:readonly
+drive:file:upload
+drive:file:download
+drive:file:view_record:readonly
+space:folder:create
+space:document:move
+sheets:spreadsheet:create
+sheets:spreadsheet:read
+sheets:spreadsheet:write_only
+sheets:spreadsheet.meta:read
+sheets:spreadsheet.meta:write_only
+base:app:copy
+base:app:create
+base:app:read
+base:app:update
+base:table:create
+base:table:read
+base:table:update
+base:table:delete
+base:field:create
+base:field:read
+base:field:update
+base:field:delete
+base:record:create
+base:record:read
+base:record:update
+base:record:delete
+base:view:read
+base:view:write_only
+base:dashboard:create
+base:dashboard:read
+base:dashboard:update
+base:dashboard:delete
+base:form:create
+base:form:read
+base:form:update
+base:form:delete
+base:role:create
+base:role:read
+base:role:update
+base:role:delete
+base:workflow:create
+base:workflow:read
+base:workflow:update
+base:workflow:delete
+base:workspace:list
+base:history:read
+wiki:space:read
+wiki:space:retrieve
+wiki:space:write_only
+wiki:node:copy
+wiki:node:create
+wiki:node:read
+wiki:node:retrieve
+wiki:node:update
+wiki:wiki:readonly
+board:whiteboard:node:create
+board:whiteboard:node:delete
+board:whiteboard:node:read</div>
+        <button class="copy-btn" onclick="copyScopes()">Copy</button>
+      </div>
+      <ol start="4">
+        <li>After adding scopes, go to <strong>Version Management & Release</strong> and create a new version to publish.</li>
+        <li>Copy the <strong>App ID</strong> and <strong>App Secret</strong> from the app's <strong>Credentials & Basic Info</strong> page and paste them above.</li>
+      </ol>
+    </div>
+  </details>
+</div>
+
+<!-- AI Provider Card -->
+<div class="card" id="ai-card">
+  <h2><span class="status-dot missing" id="ai-dot"></span> AI Provider <span style="font-size:0.8rem;font-weight:400;color:var(--text-dim)">(pick one)</span></h2>
+
+  <div class="provider-tabs">
+    <button class="provider-tab active" data-provider="claude_setup_token">Claude (Setup Token)</button>
+    <button class="provider-tab" data-provider="claude_api">Claude (API Key)</button>
+    <button class="provider-tab" data-provider="openai">OpenAI</button>
+    <button class="provider-tab" data-provider="gemini">Gemini</button>
+    <button class="provider-tab" data-provider="deepseek">DeepSeek</button>
+  </div>
+
+  <div class="provider-panel active" data-panel="claude_setup_token">
+    <div class="row">
+      <div>
+        <label for="claude_setup_token">Setup Token</label>
+        <input id="claude_setup_token" type="password" placeholder="sk-ant-oat01-...">
+      </div>
+      <div>
+        <label for="claude_model">Model</label>
+        <select id="claude_model">
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast, cheap)</option>
+          <option value="claude-sonnet-4-6-20250514">Sonnet 4.6 (balanced)</option>
+          <option value="claude-opus-4-6-20250514">Opus 4.6 (most capable)</option>
+        </select>
+      </div>
+    </div>
+    <details>
+      <summary>How to get a Claude Setup Token</summary>
+      <div class="guide">
+        <ol>
+          <li>Open a terminal and run: <span class="cmd">claude setup-token</span></li>
+          <li>Copy the token (starts with <code>sk-ant-oat01-</code>) and paste it above.</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+
+  <div class="provider-panel" data-panel="claude_api">
+    <div class="row">
+      <div>
+        <label for="claude_api_key">API Key</label>
+        <input id="claude_api_key" type="password" placeholder="sk-ant-api03-...">
+      </div>
+      <div>
+        <label for="claude_api_model">Model</label>
+        <select id="claude_api_model">
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast, cheap)</option>
+          <option value="claude-sonnet-4-6-20250514">Sonnet 4.6 (balanced)</option>
+          <option value="claude-opus-4-6-20250514">Opus 4.6 (most capable)</option>
+        </select>
+      </div>
+    </div>
+    <details>
+      <summary>How to get a Claude API Key</summary>
+      <div class="guide">
+        <ol>
+          <li>Go to <a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a></li>
+          <li>Create a new API key and paste it above.</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+
+  <div class="provider-panel" data-panel="openai">
+    <div class="row">
+      <div>
+        <label for="openai_api_key">API Key</label>
+        <input id="openai_api_key" type="password" placeholder="sk-...">
+      </div>
+      <div>
+        <label for="openai_model">Model</label>
+        <select id="openai_model">
+          <option value="gpt-4o-mini">GPT-4o mini (fast, cheap)</option>
+          <option value="gpt-4o">GPT-4o (balanced)</option>
+          <option value="gpt-4.1">GPT-4.1 (latest)</option>
+        </select>
+      </div>
+    </div>
+    <details>
+      <summary>How to get an OpenAI API Key</summary>
+      <div class="guide">
+        <ol>
+          <li>Go to <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a></li>
+          <li>Create a new API key and paste it above.</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+
+  <div class="provider-panel" data-panel="gemini">
+    <div class="row">
+      <div>
+        <label for="gemini_api_key">API Key</label>
+        <input id="gemini_api_key" type="password" placeholder="AIza...">
+      </div>
+      <div>
+        <label for="gemini_model">Model</label>
+        <select id="gemini_model">
+          <option value="gemini-2.0-flash">Gemini 2.0 Flash (fast, cheap)</option>
+          <option value="gemini-2.5-pro-preview-06-05">Gemini 2.5 Pro (most capable)</option>
+        </select>
+      </div>
+    </div>
+    <details>
+      <summary>How to get a Gemini API Key</summary>
+      <div class="guide">
+        <ol>
+          <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a></li>
+          <li>Create a new API key and paste it above.</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+
+  <div class="provider-panel" data-panel="deepseek">
+    <div class="row">
+      <div>
+        <label for="deepseek_api_key">API Key</label>
+        <input id="deepseek_api_key" type="password" placeholder="sk-...">
+      </div>
+      <div>
+        <label for="deepseek_model">Model</label>
+        <select id="deepseek_model">
+          <option value="deepseek-chat">DeepSeek Chat (V3)</option>
+          <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
+        </select>
+      </div>
+    </div>
+    <details>
+      <summary>How to get a DeepSeek API Key</summary>
+      <div class="guide">
+        <ol>
+          <li>Go to <a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek Platform</a></li>
+          <li>Create a new API key and paste it above.</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+</div>
+
+<button onclick="save()">Save Configuration</button>
+<button class="secondary" onclick="loadConfig()">Refresh</button>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = window.location.origin;
+const PROVIDERS = ['claude_setup_token', 'claude_api', 'openai', 'gemini', 'deepseek'];
+const PROVIDER_FIELDS = {
+  claude_setup_token: ['claude_setup_token', 'claude_model'],
+  claude_api: ['claude_api_key', 'claude_api_model'],
+  openai: ['openai_api_key', 'openai_model'],
+  gemini: ['gemini_api_key', 'gemini_model'],
+  deepseek: ['deepseek_api_key', 'deepseek_model'],
+};
+const PROVIDER_KEY_FIELD = {
+  claude_setup_token: 'claude_setup_token',
+  claude_api: 'claude_api_key',
+  openai: 'openai_api_key',
+  gemini: 'gemini_api_key',
+  deepseek: 'deepseek_api_key',
+};
+const ALL_FIELDS = ['feishu_app_id', 'feishu_app_secret', 'ai_provider',
+  ...Object.values(PROVIDER_FIELDS).flat()];
+
+let activeProvider = 'claude_setup_token';
+
+// Provider tab switching
+document.querySelectorAll('.provider-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const p = tab.dataset.provider;
+    activeProvider = p;
+    document.querySelectorAll('.provider-tab').forEach(t => t.classList.toggle('active', t.dataset.provider === p));
+    document.querySelectorAll('.provider-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.panel === p));
+  });
+});
+
+async function loadConfig() {
+  try {
+    const res = await fetch(`${API}/config`);
+    const data = await res.json();
+
+    // Restore active provider
+    if (data.ai_provider?.set && data.ai_provider.preview) {
+      // ai_provider is stored as plain text, preview shows first 4 chars
+      const prefix = data.ai_provider.preview.replace('***', '');
+      const match = PROVIDERS.find(p => p.startsWith(prefix));
+      if (match) {
+        activeProvider = match;
+        document.querySelectorAll('.provider-tab').forEach(t => t.classList.toggle('active', t.dataset.provider === match));
+        document.querySelectorAll('.provider-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === match));
+      }
+    }
+
+    // Populate fields
+    for (const key of ALL_FIELDS) {
+      const el = document.getElementById(key);
+      if (!el || !data[key]) continue;
+      if (data[key].set && el.tagName === 'INPUT') {
+        el.placeholder = `Configured (${data[key].preview})`;
+        el.value = '';
+      }
+      if (el.tagName === 'SELECT' && data[key].set && data[key].preview) {
+        const prefix = data[key].preview.replace('***', '');
+        for (const opt of el.options) {
+          if (opt.value.startsWith(prefix)) { el.value = opt.value; break; }
+        }
+      }
+    }
+    updateDots(data);
+  } catch (e) {
+    showToast('Failed to load config', 'error');
+  }
+}
+
+function updateDots(data) {
+  const feishuOk = data.feishu_app_id?.set && data.feishu_app_secret?.set;
+  setDot('feishu-dot', feishuOk);
+  // AI dot: check if the active provider has a key configured
+  const keyField = PROVIDER_KEY_FIELD[activeProvider];
+  const aiOk = data[keyField]?.set;
+  setDot('ai-dot', aiOk);
+}
+
+function setDot(id, ok) {
+  const dot = document.getElementById(id);
+  dot.className = 'status-dot ' + (ok ? 'ok' : 'missing');
+}
+
+async function save() {
+  const body = { ai_provider: activeProvider };
+
+  // Feishu fields
+  for (const key of ['feishu_app_id', 'feishu_app_secret']) {
+    const val = document.getElementById(key).value.trim();
+    if (val) body[key] = val;
+  }
+
+  // Active provider fields only
+  for (const key of PROVIDER_FIELDS[activeProvider]) {
+    const el = document.getElementById(key);
+    const val = el.value.trim();
+    if (el.tagName === 'SELECT') {
+      body[key] = val;
+    } else if (val) {
+      body[key] = val;
+    }
+  }
+
+  try {
+    const res = await fetch(`${API}/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    showToast('Configuration saved!', 'success');
+    for (const key of ALL_FIELDS) {
+      const el = document.getElementById(key);
+      if (el && el.type === 'password' && data[key]?.set) {
+        el.value = '';
+        el.placeholder = `Configured (${data[key].preview})`;
+      }
+    }
+    updateDots(data);
+  } catch (e) {
+    showToast('Save failed: ' + e.message, 'error');
+  }
+}
+
+function copyScopes() {
+  const text = document.getElementById('scope-list').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Scopes copied to clipboard!', 'success');
+  });
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+loadConfig();
+</script>
+</body>
+</html>

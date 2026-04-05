@@ -3,6 +3,7 @@ dist/
 
 # Python
 server/.venv/
+server/config.json
 __pycache__/
 *.pyc
 *.pyo
