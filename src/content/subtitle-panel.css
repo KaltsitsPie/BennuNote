@@ -1,0 +1,260 @@
+:host {
+  all: initial;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: #333;
+}
+
+.bennu-panel {
+  position: fixed;
+  top: 80px;
+  right: 16px;
+  width: 380px;
+  max-height: calc(100vh - 120px);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bennu-panel.hidden {
+  display: none;
+}
+
+/* Header */
+.bennu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #eee;
+  background: #f8f9fa;
+  border-radius: 12px 12px 0 0;
+  flex-shrink: 0;
+}
+
+.bennu-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.bennu-source-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  margin-left: 8px;
+}
+
+.bennu-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.bennu-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #666;
+  transition: background 0.15s;
+}
+
+.bennu-btn:hover {
+  background: #e0e0e0;
+}
+
+.bennu-close-btn {
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px !important;
+}
+
+/* Tabs */
+.bennu-tabs {
+  display: flex;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.bennu-tab {
+  flex: 1;
+  padding: 8px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #888;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.bennu-tab:hover {
+  color: #555;
+}
+
+.bennu-tab.active {
+  color: #00a1d6;
+  border-bottom-color: #00a1d6;
+  font-weight: 500;
+}
+
+/* Language bar */
+.bennu-lang-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+  flex-shrink: 0;
+}
+
+.bennu-lang-label {
+  font-size: 12px;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.bennu-lang-select {
+  flex: 1;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  outline: none;
+}
+
+.bennu-lang-select:focus {
+  border-color: #00a1d6;
+}
+
+/* Progress bar */
+.bennu-progress-bar {
+  width: 100%;
+  height: 3px;
+  background: #eee;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.bennu-progress-fill {
+  height: 100%;
+  background: #00a1d6;
+  transition: width 0.3s;
+}
+
+/* Tab content */
+.bennu-tab-content {
+  display: none;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.bennu-tab-content.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Log view */
+.bennu-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.bennu-log-entry {
+  padding: 2px 0;
+  word-break: break-all;
+}
+
+.bennu-log-time {
+  color: #6a9955;
+  margin-right: 6px;
+}
+
+.bennu-log-info { color: #9cdcfe; }
+.bennu-log-success { color: #4ec9b0; }
+.bennu-log-warn { color: #dcdcaa; }
+.bennu-log-error { color: #f44747; }
+.bennu-log-step { color: #c586c0; font-weight: 500; }
+
+/* Subtitle list */
+.bennu-subtitle-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.bennu-subtitle-item {
+  display: flex;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+  gap: 10px;
+  line-height: 1.5;
+}
+
+.bennu-subtitle-item:hover {
+  background: #f0f7ff;
+}
+
+.bennu-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #999;
+  font-family: monospace;
+  min-width: 48px;
+  padding-top: 1px;
+}
+
+.bennu-text {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
+  word-break: break-word;
+}
+
+.bennu-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: #aaa;
+  font-size: 13px;
+}
+
+/* Footer */
+.bennu-footer {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid #eee;
+  background: #f8f9fa;
+  border-radius: 0 0 12px 12px;
+  flex-shrink: 0;
+}
+
+.bennu-footer .bennu-btn {
+  flex: 1;
+  text-align: center;
+  padding: 6px 0;
+  font-size: 13px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
