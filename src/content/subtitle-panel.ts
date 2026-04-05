@@ -156,6 +156,7 @@ export class SubtitlePanel {
         <div class="bennu-summary-actions" style="display:none">
           <button class="bennu-btn" data-action="summarize">Summarize</button>
           <button class="bennu-btn" data-action="copy-summary" style="display:none">Copy Summary</button>
+          <button class="bennu-btn" data-action="regenerate" style="display:none">Regenerate</button>
         </div>
       </div>
       <div class="bennu-tab-content" data-content="settings">
@@ -507,6 +508,7 @@ export class SubtitlePanel {
       else if (action === 'settings') this.switchTab('settings');
       else if (action === 'summarize') this.onSummarize?.();
       else if (action === 'copy-summary') this.copySummary();
+      else if (action === 'regenerate') this.onSummarize?.();
       else if (action === 'save-token') this.handleSaveToken();
       else if (action === 'cancel-setup') this.hideSetupForm();
       else if (action === 'save-feishu') this.handleSaveFeishu();
@@ -840,11 +842,13 @@ export class SubtitlePanel {
       .map((p) => `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
       .join('');
 
-    // Show copy button, hide summarize button
+    // Show copy + regenerate buttons, hide summarize button
     const summarizeBtn = this.summaryActionsEl.querySelector('[data-action="summarize"]') as HTMLElement;
     const copyBtn = this.summaryActionsEl.querySelector('[data-action="copy-summary"]') as HTMLElement;
+    const regenBtn = this.summaryActionsEl.querySelector('[data-action="regenerate"]') as HTMLElement;
     if (summarizeBtn) summarizeBtn.style.display = 'none';
     if (copyBtn) copyBtn.style.display = '';
+    if (regenBtn) regenBtn.style.display = '';
     this.summaryActionsEl.style.display = '';
 
     // Auto-switch to summary tab
