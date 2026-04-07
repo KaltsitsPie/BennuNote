@@ -17,19 +17,15 @@ if ! command -v lark-cli &>/dev/null; then
   npm install -g @larksuite/cli
 fi
 
-# Check if config exists (has appId set)
-if ! lark-cli config show &>/dev/null 2>&1; then
-  echo ""
-  echo "═══════════════════════════════════════════════════════"
-  echo "  First-time setup: configuring lark-cli for Feishu"
-  echo "═══════════════════════════════════════════════════════"
-  echo ""
-  lark-cli config init
-  echo ""
-fi
+# Determine if Feishu setup is needed
+NEED_CONFIG=false
+NEED_AUTH=false
 
-# Check if auth is valid
-TOKEN_STATUS=$(lark-cli auth status 2>/dev/null | python3 -c "
+if ! lark-cli config show &>/dev/null 2>&1; then
+  NEED_CONFIG=true
+  NEED_AUTH=true
+else
+  TOKEN_STATUS=$(lark-cli auth status 2>/dev/null | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
@@ -37,18 +33,49 @@ try:
 except:
     print('')
 " 2>/dev/null || echo "")
-
-if [ "$TOKEN_STATUS" != "valid" ]; then
-  echo ""
-  echo "═══════════════════════════════════════════════════════"
-  echo "  Feishu login required (opens browser)"
-  echo "═══════════════════════════════════════════════════════"
-  echo ""
-  lark-cli auth login --domain wiki,docs,drive
-  echo ""
+  if [ "$TOKEN_STATUS" != "valid" ]; then
+    NEED_AUTH=true
+  fi
 fi
 
-echo "✓ lark-cli: authenticated"
+if [ "$NEED_AUTH" = "true" ]; then
+  echo ""
+  echo "═══════════════════════════════════════════════════════"
+  echo "  Feishu Integration Setup (Optional)"
+  echo "═══════════════════════════════════════════════════════"
+  echo ""
+  echo "  BennuNote can save video summaries and subtitles to Feishu"
+  echo "  Docs for long-term storage. If you skip, content can still"
+  echo "  be saved locally."
+  echo ""
+  read -r -p "  Set up Feishu integration? [Y/n]: " _feishu_choice
+  echo ""
+
+  if [[ "$_feishu_choice" =~ ^[nN] ]]; then
+    echo "  Skipping Feishu setup."
+    echo "  To configure Feishu later, re-run: ./start-server.sh"
+    echo ""
+    echo "⚠  lark-cli: not configured (Feishu features unavailable)"
+  else
+    if [ "$NEED_CONFIG" = "true" ]; then
+      echo "═══════════════════════════════════════════════════════"
+      echo "  First-time setup: configuring lark-cli for Feishu"
+      echo "═══════════════════════════════════════════════════════"
+      echo ""
+      lark-cli config init
+      echo ""
+    fi
+    echo "═══════════════════════════════════════════════════════"
+    echo "  Feishu login (opens browser)"
+    echo "═══════════════════════════════════════════════════════"
+    echo ""
+    lark-cli auth login --domain base,docs,drive,sheets,vc,wiki
+    echo ""
+    echo "✓ lark-cli: authenticated"
+  fi
+else
+  echo "✓ lark-cli: authenticated"
+fi
 
 # ── deno (optional — yt-dlp uses it to solve YouTube n-challenges) ──
 
