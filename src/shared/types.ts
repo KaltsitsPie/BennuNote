@@ -12,6 +12,8 @@ export interface VideoInfo {
   ownerName?: string;
   ownerMid?: number;
   coverUrl?: string;
+  pubdate?: number;    // Unix timestamp from Bilibili API
+  desc?: string;       // Video description from Bilibili API
   platform?: 'bilibili' | 'youtube';  // undefined means bilibili (backward compat)
   youtubeVideoId?: string;             // e.g. "dQw4w9WgXcQ"
 }

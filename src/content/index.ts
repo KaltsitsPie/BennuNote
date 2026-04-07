@@ -22,8 +22,9 @@ function getPanel(): SubtitlePanel {
       const p = panel!;
       p.setFeishuSyncing(true);
       p.log('Syncing subtitles to Feishu Wiki...', 'step');
-      const text = currentItems.map(i => i.content).join('\n');
-      const items = currentItems.map(i => ({ from: i.from, to: i.to, content: i.content }));
+      const merged = p.getMergedItems();
+      const text = merged.map(i => i.content).join('\n');
+      const items = merged.map(i => ({ from: i.from, to: i.to, content: i.content }));
       const title = `${currentVideoInfo!.title} - ${new Date().toLocaleDateString('zh-CN')}`;
       const targetDocToken = p.getWikiDocLink() || undefined;
       const youtubeUrl =
@@ -36,6 +37,8 @@ function getPanel(): SubtitlePanel {
         ownerName: currentVideoInfo!.ownerName,
         ownerMid: currentVideoInfo!.ownerMid,
         coverUrl: currentVideoInfo!.coverUrl,
+        pubdate: currentVideoInfo!.pubdate,
+        desc: currentVideoInfo!.desc,
         videoUrl: youtubeUrl,
       };
       chrome.runtime.sendMessage(
@@ -49,6 +52,9 @@ function getPanel(): SubtitlePanel {
           if (response?.success && response.docUrl) {
             p.log('Feishu sync successful!', 'success');
             p.showFeishuLink(response.docUrl);
+            if (!targetDocToken) {
+              window.open(response.docUrl, '_blank');
+            }
           } else {
             p.log(`Feishu sync failed: ${response?.error || 'Unknown error'}`, 'error');
           }
@@ -156,6 +162,7 @@ async function handleExtractYouTube(language: string) {
   p.log(`videoId=${videoInfo.youtubeVideoId}`, 'success');
   p.log(`Title: ${videoInfo.title}`, 'info');
   currentVideoInfo = videoInfo;
+  p.setVideoInfo(videoInfo);
 
   if (!result || result.items.length === 0) {
     if (debug.trackCount === 0) {
@@ -239,6 +246,7 @@ async function handleExtract(language: string) {
   p.log(`bvid=${videoInfo.bvid}  cid=${videoInfo.cid}`, 'success');
   p.log(`Title: ${videoInfo.title}`, 'info');
   currentVideoInfo = videoInfo;
+  p.setVideoInfo(videoInfo);
   if (videoInfo.partTitle) {
     p.log(`Part: ${videoInfo.partTitle}`, 'info');
   }

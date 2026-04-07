@@ -22,6 +22,8 @@
             ownerName: s.videoData.owner?.name,
             ownerMid: s.videoData.owner?.mid,
             coverUrl: s.videoData.pic,
+            pubdate: s.videoData.pubdate,
+            desc: s.videoData.desc,
             pages: (s.videoData.pages || []).map((p: { cid: number; part: string }) => ({
               cid: p.cid,
               part: p.part,

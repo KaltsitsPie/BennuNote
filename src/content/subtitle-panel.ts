@@ -1,4 +1,4 @@
-import type { SubtitleItem, SubtitleSource, SubtitleTrack } from '../shared/types';
+import type { SubtitleItem, SubtitleSource, SubtitleTrack, VideoInfo } from '../shared/types';
 import cssText from './subtitle-panel.css?inline';
 
 type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'step';
@@ -9,13 +9,6 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function formatSrtTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const ms = Math.floor((seconds % 1) * 1000);
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
-}
 
 /** Merge consecutive short segments into paragraphs based on pauses and length. */
 function mergeSegments(items: SubtitleItem[]): SubtitleItem[] {
@@ -83,6 +76,7 @@ export class SubtitlePanel {
   private feishuUrl!: HTMLAnchorElement;
   private onSyncFeishu: (() => void) | null = null;
   private onSummarize: (() => void) | null = null;
+  private videoInfo: VideoInfo | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -364,8 +358,7 @@ export class SubtitlePanel {
         </div>
         <div class="bennu-footer-buttons">
           <button class="bennu-btn" data-action="copy">Copy Text</button>
-          <button class="bennu-btn" data-action="download-txt">TXT</button>
-          <button class="bennu-btn" data-action="download-srt">SRT</button>
+          <button class="bennu-btn" data-action="download">Download</button>
           <button class="bennu-btn bennu-feishu-btn" data-action="sync-feishu">Sync to Feishu</button>
         </div>
       </div>
@@ -559,7 +552,7 @@ export class SubtitlePanel {
             body: JSON.stringify({
               markdown: rootMarkdown,
               title: name,
-              wiki_node: spaceId,
+              wiki_space: spaceId,
             }),
           });
           const docData = await docResp.json();
@@ -575,6 +568,8 @@ export class SubtitlePanel {
           wikiCreateStatus.innerHTML = docUrl
             ? `✓ Created! <a href="${docUrl}" target="_blank" style="color:#00a1d6">Open in Feishu →</a>`
             : '✓ Created!';
+
+          if (docUrl) window.open(docUrl, '_blank');
 
           // Switch to existing mode to show the token
           panel.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach(
@@ -659,8 +654,7 @@ export class SubtitlePanel {
       if (action === 'close') this.hide();
       else if (action === 'save-log') this.saveLog();
       else if (action === 'copy') this.copyText();
-      else if (action === 'download-txt') this.downloadTxt();
-      else if (action === 'download-srt') this.downloadSrt();
+      else if (action === 'download') this.downloadMarkdown();
       else if (action === 'sync-feishu') this.onSyncFeishu?.();
       else if (action === 'settings') this.switchTab('settings');
       else if (action === 'summarize') this.onSummarize?.();
@@ -852,7 +846,13 @@ export class SubtitlePanel {
     const key = SubtitlePanel.hourKey();
     const content = this.logLines.join('\n');
     const filename = `${key.replace('log_', 'bennunote-')}.txt`;
-    this.downloadFile(content, filename, 'text/plain');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
     this.log('Log saved to file', 'success');
   }
 
@@ -1055,6 +1055,10 @@ export class SubtitlePanel {
     }
   }
 
+  getMergedItems(): SubtitleItem[] {
+    return this.mergedItems;
+  }
+
   private getPlainText(): string {
     return this.mergedItems
       .map((item) => `[${formatTime(item.from)}] ${item.content}`)
@@ -1069,29 +1073,102 @@ export class SubtitlePanel {
     setTimeout(() => (copyBtn.textContent = orig), 1500);
   }
 
-  private downloadTxt() {
-    const text = this.getPlainText();
-    this.downloadFile(text, 'subtitle.txt', 'text/plain');
+  private buildFeishuMarkdown(): string {
+    const vi = this.videoInfo;
+    const title = vi?.title || 'Untitled';
+    const lines: string[] = [`# ${title}`];
+
+    // Cover image
+    if (vi?.coverUrl) {
+      const url = vi.coverUrl.startsWith('//') ? `https:${vi.coverUrl}` : vi.coverUrl;
+      lines.push(`![cover](${url})`);
+    }
+
+    // Info table
+    const infoRows: [string, string][] = [];
+    if (vi?.ownerName) {
+      const ownerCell = vi.ownerMid
+        ? `[${vi.ownerName}](https://space.bilibili.com/${vi.ownerMid})`
+        : vi.ownerName;
+      infoRows.push(['Up主', ownerCell]);
+    }
+    if (vi?.bvid) {
+      infoRows.push(['链接', `https://www.bilibili.com/video/${vi.bvid}`]);
+    } else if (vi?.platform === 'youtube' && vi.youtubeVideoId) {
+      infoRows.push(['链接', `https://www.youtube.com/watch?v=${vi.youtubeVideoId}`]);
+    }
+    if (vi?.pubdate) {
+      const dt = new Date(vi.pubdate * 1000);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const dateStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+      infoRows.push(['发布时间', dateStr]);
+    }
+    if (vi?.desc) {
+      infoRows.push(['简介', vi.desc]);
+    }
+
+    if (infoRows.length > 0) {
+      lines.push('', '## 主要信息', '', '| | |', '|---|---|');
+      for (const [label, value] of infoRows) {
+        lines.push(`| ${label} | ${value} |`);
+      }
+    }
+
+    // Subtitle table
+    if (this.mergedItems.length > 0) {
+      lines.push('', '## 字幕', '', '| 时间 | 内容 |', '|---|---|');
+      for (const item of this.mergedItems) {
+        const total = Math.floor(item.from);
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const s = total % 60;
+        const time = h > 0
+          ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+          : `${m}:${s.toString().padStart(2, '0')}`;
+        lines.push(`| ${time} | ${item.content} |`);
+      }
+    }
+
+    lines.push('');
+    return lines.join('\n');
   }
 
-  private downloadSrt() {
-    const srt = this.items
-      .map(
-        (item, i) =>
-          `${i + 1}\n${formatSrtTime(item.from)} --> ${formatSrtTime(item.to)}\n${item.content}\n`
-      )
-      .join('\n');
-    this.downloadFile(srt, 'subtitle.srt', 'text/srt');
-  }
+  private async downloadMarkdown() {
+    if (this.mergedItems.length === 0) return;
 
-  private downloadFile(content: string, filename: string, type: string) {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    const btn = this.shadow.querySelector('[data-action="download"]') as HTMLButtonElement;
+    const origText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    try {
+      const videoTitle = this.videoInfo?.title || 'subtitle';
+      const safeTitle = videoTitle.replace(/[/\\:*?"<>|]/g, '_');
+      const date = new Date().toLocaleDateString('zh-CN');
+      const filename = `${safeTitle} - ${date}.md`;
+      const content = this.buildFeishuMarkdown();
+
+      // showSaveFilePicker: works with all folders (including Downloads),
+      // and the browser automatically remembers the last used directory.
+      const fileHandle = await (window as any).showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }],
+      });
+      const writable = await fileHandle.createWritable();
+      await writable.write(content);
+      await writable.close();
+
+      btn.textContent = 'Saved!';
+      setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 1500);
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        btn.textContent = origText;
+        btn.disabled = false;
+        return;
+      }
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 1500);
+    }
   }
 
   setServiceStatus(online: boolean) {
@@ -1100,6 +1177,10 @@ export class SubtitlePanel {
       dot.style.background = online ? '#4caf50' : '#f44336';
       dot.title = online ? 'Backend online' : 'Backend offline';
     }
+  }
+
+  setVideoInfo(info: VideoInfo) {
+    this.videoInfo = info;
   }
 
   setSyncHandler(handler: () => void) {
