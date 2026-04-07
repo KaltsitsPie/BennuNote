@@ -21,11 +21,14 @@ def list_wiki_nodes(space_id: str, parent_node_token: str = "") -> dict:
     return run("wiki", "nodes", "list", "--params", json.dumps(params))
 
 
-def create_doc(markdown: str, title: str = "", wiki_node: str = "", folder_token: str = "") -> dict:
+def create_doc(markdown: str, title: str = "", wiki_node: str = "", folder_token: str = "",
+               wiki_space: str = "") -> dict:
     args = ["docs", "+create", "--markdown", markdown]
     if title:
         args += ["--title", title]
-    if wiki_node:
+    if wiki_space:
+        args += ["--wiki-space", wiki_space]
+    elif wiki_node:
         args += ["--wiki-node", wiki_node]
     elif folder_token:
         args += ["--folder-token", folder_token]
