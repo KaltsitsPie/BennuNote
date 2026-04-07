@@ -48,7 +48,7 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
           body: JSON.stringify({
             bvid: msg.bvid,
             video_url: msg.videoUrl || '',
-            model_size: config.whisperModelSize || 'small',
+            model_size: config.whisperModelSize || 'tiny',
             cookie: config.bilibiliCookie || '',
             language: msg.language,
           }),

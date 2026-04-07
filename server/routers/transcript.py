@@ -19,7 +19,7 @@ router = APIRouter()
 class TranscriptRequest(BaseModel):
     bvid: str = ""
     video_url: str = ""  # explicit URL (e.g. YouTube); takes priority over bvid
-    model_size: str = "small"
+    model_size: str = "tiny"
     cookie: str = ""
     language: str = "zh"
 

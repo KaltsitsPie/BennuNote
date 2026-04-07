@@ -343,7 +343,7 @@ export class SubtitlePanel {
             <select class="bennu-settings-select" data-setting="whisperModelSize">
               <option value="tiny">Tiny</option>
               <option value="base">Base</option>
-              <option value="small">Small (default)</option>
+              <option value="small">Small</option>
               <option value="medium">Medium</option>
               <option value="large">Large</option>
             </select>
@@ -717,7 +717,7 @@ export class SubtitlePanel {
       };
       set('bilibiliCookie', config.bilibiliCookie || '');
       set('maxTokens', String(config.maxTokens || 4096));
-      set('whisperModelSize', config.whisperModelSize || 'small');
+      set('whisperModelSize', config.whisperModelSize || 'tiny');
 
       // Restore model selects
       this.contentSettings.querySelectorAll<HTMLSelectElement>('.bennu-model-select').forEach((sel) => {

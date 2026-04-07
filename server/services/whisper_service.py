@@ -21,7 +21,7 @@ def get_model(size: str = "small") -> WhisperModel:
     return _model
 
 
-def transcribe_audio(audio_path: str, model_size: str = "small", language: str = "zh") -> list:
+def transcribe_audio(audio_path: str, model_size: str = "tiny", language: str = "zh") -> list:
     """Transcribe an audio file and return list of {from, to, content} dicts."""
     file_size_mb = os.path.getsize(audio_path) / 1024 / 1024
     logger.info("Transcription start: path=%s, size=%.1fMB, language=%s", audio_path, file_size_mb, language)

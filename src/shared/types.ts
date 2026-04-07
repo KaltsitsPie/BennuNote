@@ -52,7 +52,7 @@ export interface BennuNoteConfig {
 
 export const DEFAULT_CONFIG: BennuNoteConfig = {
   bilibiliCookie: '',
-  whisperModelSize: 'small',
+  whisperModelSize: 'tiny',
   aiProvider: '',
   claudeSetupToken: '',
   claudeModel: '',
