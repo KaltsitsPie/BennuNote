@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import tempfile
 import subprocess
 import logging
@@ -47,14 +48,24 @@ def transcript(req: TranscriptRequest):
                 "--no-playlist",
             ]
             if is_youtube:
-                # YouTube forces SABR streaming on the web client (yt-dlp#12482).
-                # ios and web_creator clients still serve direct audio URLs.
-                cmd.extend(["--extractor-args", "youtube:player_client=ios,web_creator,default"])
+                # Use Deno-based n-challenge solver (EJS) for YouTube.
+                # web_creator was previously used but now requires auth; EJS + default client is more reliable.
+                # Clear the EJS challenge-solver cache before each request so a stale lib.json doesn't
+                # silently produce wrong n-challenge solutions (→ HTTP 403 from CDN).
+                ejs_cache = os.path.expanduser("~/.cache/yt-dlp/challenge-solver")
+                if os.path.exists(ejs_cache):
+                    shutil.rmtree(ejs_cache)
+                    logger.info("Cleared EJS challenge-solver cache to force fresh download")
+                cmd.extend(["--remote-components", "ejs:github"])
             if req.cookie:
                 cookie_file = os.path.join(tmpdir, "cookies.txt")
                 with open(cookie_file, "w") as f:
                     f.write(req.cookie)
                 cmd.extend(["--cookies", cookie_file])
+            elif is_youtube:
+                # No explicit cookie provided — use Chrome's cookie store for YouTube auth.
+                # This handles "Sign in to confirm you're not a bot" errors.
+                cmd.extend(["--cookies-from-browser", "chrome"])
             cmd.append(url)
 
             logger.info("Running yt-dlp: %s", " ".join(cmd))

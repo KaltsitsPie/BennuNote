@@ -50,10 +50,16 @@
   │
   ▼
 轨道选择（pickYtTrack）
-  ├─ 有目标语言的人工 CC 轨道 → 直接加载
-  ├─ 有目标语言的自动生成轨道 → 直接加载
-  ├─ 有可翻译轨道（isTranslatable）→ 加载 + &tlang= 参数实现翻译
-  └─ 无任何轨道 → 提示，终止（无后台 ASR 降级）
+  ├─ 有目标语言的人工 CC 轨道 → 直接加载，结束
+  ├─ 有目标语言的自动生成轨道 → 直接加载，结束
+  ├─ 有可翻译轨道（isTranslatable）→ 加载 + &tlang= 参数实现翻译，结束
+  └─ 无任何字幕轨道
+       │
+       ▼
+    后台服务（Python localhost:2185）
+    POST /transcript { video_url }
+    ├─ yt-dlp 下载音频（EJS/Deno n-challenge + Chrome cookies）
+    └─ faster-whisper 本地模型识别 → 成功，结束
 ```
 
 ---
@@ -202,9 +208,9 @@ API 基地址：`member.bilibili.com/x/bcut/rubick-interface`
 
 ---
 
-## YouTube：字幕提取
+## YouTube：字幕提取（客户端）
 
-YouTube 字幕完全在客户端获取，**无需后台服务**。
+YouTube 优先在客户端直接获取字幕，**无需后台服务**。
 
 ### 步骤 1：读取 ytInitialPlayerResponse
 
@@ -226,7 +232,7 @@ YouTube 页面加载时会将播放器数据注入 `window.ytInitialPlayerRespon
 | 3 | 人工 CC，前缀匹配 | `.zh-Hant`（匹配 `zh`） |
 | 4 | 自动生成，前缀匹配 | `a.zh-TW` |
 | 5 | 翻译降级：任意 `isTranslatable` 轨道 + `&tlang=zh-Hans` | 英文轨道 → 翻译为中文 |
-| — | 无任何轨道 | 提示，终止 |
+| — | 无任何轨道 → 降级到后台 Whisper | |
 
 `zh` 的候选 language code 顺序：`zh-Hans` → `zh-Hant` → `zh`。
 
@@ -258,9 +264,43 @@ GET {track.baseUrl}&fmt=json3
 
 面板 badge 分别显示「YouTube CC」和「YouTube Auto」。
 
-### 无后台降级
+---
 
-YouTube 视频的自动字幕覆盖率高，且支持翻译，因此 **不触发后台 Whisper 转写**。若视频确实无任何字幕轨道，面板会显示提示，不进行进一步处理。
+## YouTube：后台 Whisper 降级
+
+当视频**无任何字幕轨道**时，content script 触发后台 Whisper 转写。
+
+### 调用
+
+```
+POST localhost:2185/transcript
+Body: { "video_url": "https://www.youtube.com/watch?v=...", "model_size": "small", "language": "zh" }
+```
+
+### yt-dlp 音频下载
+
+YouTube 使用 n-challenge 机制保护视频 URL，需要专门处理：
+
+| 机制 | 说明 |
+|------|------|
+| `--remote-components ejs:github` | 使用本地 Deno 运行 EJS solver，解码 n-challenge 参数 |
+| `--cookies-from-browser chrome` | 从本机 Chrome 提取 Cookie，绕过 bot 检测 |
+| EJS cache 清除 | 每次请求前删除 `~/.cache/yt-dlp/challenge-solver/`，确保 EJS solver lib 为最新版本 |
+
+> **为什么要清 EJS cache**：YouTube 定期更新 JS player（如从 `0004de42` 到 `8c83ec2e`），旧版 EJS solver lib 无法正确解码新 player 的 n-challenge，会导致 CDN 返回 HTTP 403。每次强制重新下载 lib（约 1 秒）可保证解码正确性。
+
+> **为什么不用 `web_creator` client**：`web_creator` 是 YouTube Studio 专用客户端，2026年起需要账号登录才能调用，无法用于无 auth 场景。
+
+下载格式：最佳音频流（通常为 format 251，WebM/Opus），无需 ffmpeg，faster-whisper 可直接读取 `.webm` 文件。
+
+### faster-whisper 转写
+
+YouTube 跳过 Bcut ASR（Bilibili 专用），直接使用 faster-whisper：
+
+- 模型大小可配置（默认 small）
+- `language` 参数来自请求（用户在 Popup 中选择）
+
+成功时返回 `source: "whisper"`。
 
 ---
 
@@ -292,11 +332,11 @@ YouTube 视频的自动字幕覆盖率高，且支持翻译，因此 **不触发
           │ 轨道选择        │       │   ↓ 失败          │
           │   ↓ 翻译降级    │       │ Python 后台      │
           │ fmt=json3 下载  │       │ localhost:2185   │
-          └────────────────┘       │ 阶段 2            │
-                                   │  yt-dlp 下载     │
-                                   │    ↓              │
-                                   │  Bcut ASR        │
-                                   │    ↓ 失败         │
-                                   │  faster-whisper  │
+          │   ↓ 无轨道      │       │ 阶段 2            │
+          │ Python 后台    │       │  yt-dlp 下载     │
+          │ localhost:2185 │       │    ↓              │
+          │ yt-dlp + EJS  │       │  Bcut ASR        │
+          │ faster-whisper │       │    ↓ 失败         │
+          └────────────────┘       │  faster-whisper  │
                                    └──────────────────┘
 ```

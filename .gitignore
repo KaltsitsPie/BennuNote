@@ -13,3 +13,6 @@ __pycache__/
 
 .obsidian/
  .claude/settings.local.json
+
+# Sensitive credentials
+cookies.txt

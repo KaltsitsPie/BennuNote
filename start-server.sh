@@ -46,6 +46,22 @@ fi
 
 echo "✓ lark-cli: authenticated"
 
+# ── deno (optional — yt-dlp uses it to solve YouTube n-challenges) ──
+
+if ! command -v deno &>/dev/null; then
+  if command -v brew &>/dev/null; then
+    echo "deno not found. Installing via Homebrew (needed for YouTube audio download)..."
+    brew install deno
+  else
+    echo "⚠ Warning: deno not found. YouTube Whisper transcription may fail."
+    echo "  Install via: brew install deno"
+  fi
+fi
+
+if command -v deno &>/dev/null; then
+  echo "✓ deno: $(deno --version | head -1)"
+fi
+
 # ── Python version check ──
 
 # Find a working Python 3.10+ — validate version, stdlib, AND venv creation
