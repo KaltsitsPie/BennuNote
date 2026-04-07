@@ -8,9 +8,13 @@ VENV_DIR="$SERVER_DIR/.venv"
 
 # ── lark-cli prerequisite ──
 
+# Ensure nvm-managed binaries are on PATH (needed when run from non-login shells)
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
 if ! command -v lark-cli &>/dev/null; then
   echo "lark-cli not found. Installing..."
-  npm install -g @anthropic-ai/lark-cli
+  npm install -g @larksuite/cli
 fi
 
 # Check if config exists (has appId set)
@@ -40,7 +44,7 @@ if [ "$TOKEN_STATUS" != "valid" ]; then
   echo "  Feishu login required (opens browser)"
   echo "═══════════════════════════════════════════════════════"
   echo ""
-  lark-cli auth login
+  lark-cli auth login --domain wiki,docs,drive
   echo ""
 fi
 
@@ -49,12 +53,15 @@ echo "✓ lark-cli: authenticated"
 # ── deno (optional — yt-dlp uses it to solve YouTube n-challenges) ──
 
 if ! command -v deno &>/dev/null; then
-  if command -v brew &>/dev/null; then
-    echo "deno not found. Installing via Homebrew (needed for YouTube audio download)..."
-    brew install deno
+  echo "deno not found. Installing (needed for YouTube audio download)..."
+  if command -v brew &>/dev/null && brew install deno 2>/dev/null; then
+    true
+  elif curl -fsSL https://deno.land/install.sh | sh 2>/dev/null; then
+    export DENO_INSTALL="$HOME/.deno"
+    export PATH="$DENO_INSTALL/bin:$PATH"
   else
-    echo "⚠ Warning: deno not found. YouTube Whisper transcription may fail."
-    echo "  Install via: brew install deno"
+    echo "⚠ Warning: deno installation failed. YouTube Whisper transcription may fail."
+    echo "  Install manually: curl -fsSL https://deno.land/install.sh | sh"
   fi
 fi
 
