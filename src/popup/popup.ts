@@ -16,8 +16,10 @@ async function init() {
   // Check if on bilibili video page
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tabs[0]?.url || '';
-  if (!url.includes('bilibili.com/video/')) {
-    statusText.textContent = 'Please navigate to a Bilibili video page';
+  const isBilibili = url.includes('bilibili.com/video/');
+  const isYouTube = url.includes('youtube.com/watch');
+  if (!isBilibili && !isYouTube) {
+    statusText.textContent = 'Please navigate to a Bilibili or YouTube video page';
     btn.disabled = true;
     return;
   }

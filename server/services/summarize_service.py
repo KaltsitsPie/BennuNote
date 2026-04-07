@@ -9,6 +9,7 @@ Supports 5 providers (pick one):
 """
 
 import time
+from typing import Optional
 
 SYSTEM_PROMPT = """\
 你是一位专业的内容分析师。请对以下视频文案进行深度总结，输出规范的 Markdown 文档。
@@ -45,7 +46,7 @@ DEFAULT_MODELS = {
 
 def summarize_with_params(
     provider: str, api_key: str, title: str, text: str,
-    model: str | None = None, max_tokens: int | None = None, max_retries: int = 3
+    model: Optional[str] = None, max_tokens: Optional[int] = None, max_retries: int = 3
 ) -> str:
     """Called by the router with explicit provider/key/model from the request."""
     m = model or DEFAULT_MODELS.get(provider, "")
@@ -66,70 +67,6 @@ def summarize_with_params(
         raise ValueError(f"Unknown provider: {provider}")
 
 
-def get_active_provider() -> tuple[str, dict]:
-    """Return (provider_name, config_dict) or raise ValueError."""
-    cfg = load_config()
-    provider = cfg.get("ai_provider", "")
-
-    if not provider:
-        # Auto-detect: check which key is set
-        for p in ("claude_setup_token", "claude_api", "openai", "gemini", "deepseek"):
-            key_field = _key_field(p)
-            if cfg.get(key_field):
-                provider = p
-                break
-
-    if not provider:
-        raise ValueError(
-            "No AI provider configured. Please set one in Settings or the setup page."
-        )
-    return provider, cfg
-
-
-def _key_field(provider: str) -> str:
-    """Map provider name to its API key config field."""
-    return {
-        "claude_setup_token": "claude_setup_token",
-        "claude_api": "claude_api_key",
-        "openai": "openai_api_key",
-        "gemini": "gemini_api_key",
-        "deepseek": "deepseek_api_key",
-    }[provider]
-
-
-def _model_field(provider: str) -> str:
-    """Map provider name to its model config field."""
-    return {
-        "claude_setup_token": "claude_model",
-        "claude_api": "claude_api_model",
-        "openai": "openai_model",
-        "gemini": "gemini_model",
-        "deepseek": "deepseek_model",
-    }[provider]
-
-
-def summarize(title: str, text: str, max_retries: int = 3) -> str:
-    provider, cfg = get_active_provider()
-    key = cfg.get(_key_field(provider), "")
-    model = cfg.get(_model_field(provider), "") or DEFAULT_MODELS[provider]
-
-    if not key:
-        raise ValueError(f"API key for {provider} is not configured.")
-
-    if provider == "claude_setup_token":
-        return _summarize_claude_setup_token(key, model, title, text, max_retries)
-    elif provider == "claude_api":
-        return _summarize_claude_api(key, model, title, text, max_retries)
-    elif provider == "openai":
-        if model == "gpt-5.4-pro":
-            return _summarize_openai_responses(key, model, title, text, max_retries)
-        return _summarize_openai(key, model, title, text, max_retries)
-    elif provider == "gemini":
-        return _summarize_gemini(key, model, title, text, max_retries)
-    elif provider == "deepseek":
-        return _summarize_deepseek(key, model, title, text, max_retries)
-    else:
-        raise ValueError(f"Unknown provider: {provider}")
 
 
 def _summarize_claude_setup_token(

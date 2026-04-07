@@ -1,6 +1,6 @@
 # BennuNote 字幕获取流程
 
-本文档描述 BennuNote 获取 B 站视频字幕的完整流程。
+本文档描述 BennuNote 获取视频字幕的完整流程，支持 B 站和 YouTube 两个平台。
 
 ---
 
@@ -10,8 +10,15 @@
 用户选择目标语言（默认中文）
   │
   ▼
+平台检测（根据当前页面域名）
+  ├─ bilibili.com → B 站流程
+  └─ youtube.com  → YouTube 流程
+```
+
+### B 站流程
+
+```
 获取视频信息（bvid, cid, title）
-  │
   ├─ 策略1: __INITIAL_STATE__（页面注入）
   │    失败 ↓
   └─ 策略2: Bilibili /x/web-interface/view API
@@ -32,9 +39,39 @@
   └─ faster-whisper 本地模型识别 → 成功，结束
 ```
 
+### YouTube 流程
+
+```
+读取 ytInitialPlayerResponse（页面注入）
+  失败 → 提示刷新页面，终止
+  │
+  ▼
+获取字幕轨道列表（captionTracks）
+  │
+  ▼
+轨道选择（pickYtTrack）
+  ├─ 有目标语言的人工 CC 轨道 → 直接加载
+  ├─ 有目标语言的自动生成轨道 → 直接加载
+  ├─ 有可翻译轨道（isTranslatable）→ 加载 + &tlang= 参数实现翻译
+  └─ 无任何轨道 → 提示，终止（无后台 ASR 降级）
+```
+
 ---
 
-## 阶段 0：获取视频信息
+## 语言选择
+
+用户在 Popup 中选择目标语言后触发提取。可选语言：
+
+- **中文**（zh，默认）
+- **English**（en）
+- **日本語**（ja）
+- **한국어**（ko）
+
+选中的语言作为 `EXTRACT_SUBTITLES` 消息的 `language` 字段传递到 content script。
+
+---
+
+## B 站：阶段 0 — 获取视频信息
 
 从当前页面提取 `bvid`、`cid`、`title`，有两级降级：
 
@@ -55,20 +92,7 @@
 
 ---
 
-## 语言选择
-
-用户在 Popup 中选择目标语言后触发提取。可选语言：
-
-- **中文**（zh，默认）
-- **English**（en）
-- **日本語**（ja）
-- **한국어**（ko）
-
-选中的语言作为 `EXTRACT_SUBTITLES` 消息的 `language` 字段传递到 content script。
-
----
-
-## ���段 1：Bilibili Player API 字幕
+## B 站：阶段 1 — Bilibili Player API 字幕
 
 最快路径，2-3 秒内完成。**严格匹配用户选择的目标语言**。
 
@@ -124,7 +148,7 @@ GET {subtitle_url}   // https://aisubtitle.hdslb.com/...
 
 ---
 
-## 阶段 2：后台服务（Python）
+## B 站：阶段 2 — 后台服务（Python）
 
 Python 后台运行在 `localhost:2185`，提供 `/transcript` 接口。内部有两级降级：先尝试 Bcut ASR，失败再用 faster-whisper。
 
@@ -178,6 +202,68 @@ API 基地址：`member.bilibili.com/x/bcut/rubick-interface`
 
 ---
 
+## YouTube：字幕提取
+
+YouTube 字幕完全在客户端获取，**无需后台服务**。
+
+### 步骤 1：读取 ytInitialPlayerResponse
+
+YouTube 页面加载时会将播放器数据注入 `window.ytInitialPlayerResponse`。由于 Chrome 扩展 content script 默认运行在 ISOLATED world，无法直接访问页面 JS 变量，因此通过两个 world 协作：
+
+- **MAIN world**（`youtube-page-bridge.ts`，`document_start`）：监听 `BENNUNOTE_GET_YT_STATE` postMessage，读取 `ytInitialPlayerResponse` 并将关键字段（videoId、title、captionTracks 等）回传
+- **ISOLATED world**（`youtube-api.ts`）：发送请求，等待响应，超时 1.5 秒
+
+> **SPA 导航注意**：YouTube 是单页应用。从一个视频导航到另一个视频时页面不重新加载，但 `ytInitialPlayerResponse` 会被 YouTube 自身的 JS 更新。桥接脚本每次都按需读取当前值，因此每次点击「提取」均能获取当前视频的数据。若出现视频 ID 与 URL 不匹配的情况，面板会提示刷新页面。
+
+### 步骤 2：轨道选择（`pickYtTrack`）
+
+从 `captionTracks` 数组中按优先级选取目标语言轨道：
+
+| 优先级 | 条件 | 示例（目标 zh） |
+|--------|------|----------------|
+| 1 | 人工 CC，精确匹配（`vssId` 以 `.` 开头） | `.zh-Hans` |
+| 2 | 自动生成，精确匹配（`vssId` 以 `a.` 开头） | `a.zh-Hans` |
+| 3 | 人工 CC，前缀匹配 | `.zh-Hant`（匹配 `zh`） |
+| 4 | 自动生成，前缀匹配 | `a.zh-TW` |
+| 5 | 翻译降级：任意 `isTranslatable` 轨道 + `&tlang=zh-Hans` | 英文轨道 → 翻译为中文 |
+| — | 无任何轨道 | 提示，终止 |
+
+`zh` 的候选 language code 顺序：`zh-Hans` → `zh-Hant` → `zh`。
+
+### 步骤 3：获取字幕内容
+
+```
+GET {track.baseUrl}&fmt=json3
+（翻译时附加 &tlang=zh-Hans 等参数）
+```
+
+响应格式（json3）：
+
+```json
+{
+  "events": [
+    { "tStartMs": 0, "dDurationMs": 3000, "segs": [{ "utf8": "Hello world" }] }
+  ]
+}
+```
+
+转换为统一的 `SubtitleItem[]`：`from = tStartMs/1000`，`to = (tStartMs+dDurationMs)/1000`，`content = segs[].utf8` 拼接后去换行。
+
+### 字幕来源标记
+
+| 情况 | source |
+|------|--------|
+| 人工上传字幕（非翻译） | `yt_cc` |
+| 自动生成字幕 或 翻译 | `yt_auto` |
+
+面板 badge 分别显示「YouTube CC」和「YouTube Auto」。
+
+### 无后台降级
+
+YouTube 视频的自动字幕覆盖率高，且支持翻译，因此 **不触发后台 Whisper 转写**。若视频确实无任何字幕轨道，面板会显示提示，不进行进一步处理。
+
+---
+
 ## 数据流图
 
 ```
@@ -193,18 +279,24 @@ API 基地址：`member.bilibili.com/x/bcut/rubick-interface`
                                          │  (index.ts)     │
                                          └───┬────────────┘
                                              │
-                        ┌────────────────────┤
-                        │                    │
-                        ▼                    ▼
-               ┌──────────────┐      ┌──────────────────┐
-               │ Bilibili API │      │  Python 后台     │
-               │ (字幕轨道)    │      │  localhost:2185  │
-               │ 阶段 1       │      │  阶段 2          │
-               │ 严格语言匹配  │      │                  │
-               └──────────────┘      │  yt-dlp 下载     │
-                                     │    ↓              │
-                                     │  Bcut ASR        │
-                                     │    ↓ 失败         │
-                                     │  faster-whisper  │
-                                     └──────────────────┘
+                        平台检测             │
+                   ┌─────────────────────────┤
+                   │                         │
+                   ▼                         ▼
+          ┌────────────────┐       ┌──────────────────┐
+          │  YouTube 流程  │       │   B 站流程        │
+          │                │       │                  │
+          │ ytInitialPlayer│       │ Bilibili API      │
+          │ Response（桥） │       │ (字幕轨道)        │
+          │   ↓            │       │ 阶段 1            │
+          │ 轨道选择        │       │   ↓ 失败          │
+          │   ↓ 翻译降级    │       │ Python 后台      │
+          │ fmt=json3 下载  │       │ localhost:2185   │
+          └────────────────┘       │ 阶段 2            │
+                                   │  yt-dlp 下载     │
+                                   │    ↓              │
+                                   │  Bcut ASR        │
+                                   │    ↓ 失败         │
+                                   │  faster-whisper  │
+                                   └──────────────────┘
 ```

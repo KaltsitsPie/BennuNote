@@ -1,11 +1,12 @@
 import { extractVideoInfo, fetchSubtitles, loadTrack, setLogFn } from './bilibili-api';
+import { extractYouTubeSubtitles, setYtLogFn } from './youtube-api';
 import { SubtitlePanel } from './subtitle-panel';
 import type { Message } from '../shared/messages';
-import type { BennuNoteConfig, SubtitleItem } from '../shared/types';
+import type { BennuNoteConfig, SubtitleItem, VideoInfo } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/types';
 
 let panel: SubtitlePanel | null = null;
-let currentVideoInfo: { bvid: string; cid: number; title: string; ownerName?: string; ownerMid?: number; coverUrl?: string } | null = null;
+let currentVideoInfo: VideoInfo | null = null;
 let currentItems: SubtitleItem[] = [];
 let backendOnline = false;
 
@@ -14,6 +15,7 @@ function getPanel(): SubtitlePanel {
     panel = new SubtitlePanel();
     // Wire up log so bilibili-api.ts can emit to the panel too
     setLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
+    setYtLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
 
     panel.setSyncHandler(() => {
       if (!currentVideoInfo || !panel) return;
@@ -24,12 +26,17 @@ function getPanel(): SubtitlePanel {
       const items = currentItems.map(i => ({ from: i.from, to: i.to, content: i.content }));
       const title = `${currentVideoInfo!.title} - ${new Date().toLocaleDateString('zh-CN')}`;
       const targetDocToken = p.getWikiDocLink() || undefined;
+      const youtubeUrl =
+        currentVideoInfo!.platform === 'youtube' && currentVideoInfo!.youtubeVideoId
+          ? `https://www.youtube.com/watch?v=${currentVideoInfo!.youtubeVideoId}`
+          : undefined;
       const videoInfo = {
         bvid: currentVideoInfo!.bvid,
         title: currentVideoInfo!.title,
         ownerName: currentVideoInfo!.ownerName,
         ownerMid: currentVideoInfo!.ownerMid,
         coverUrl: currentVideoInfo!.coverUrl,
+        videoUrl: youtubeUrl,
       };
       chrome.runtime.sendMessage(
         { type: 'WRITE_FEISHU', text, title, items, videoInfo, targetDocToken },
@@ -124,11 +131,90 @@ async function checkBackendHealth(p: SubtitlePanel): Promise<boolean> {
   }
 }
 
+function detectPlatform(): 'bilibili' | 'youtube' | 'unknown' {
+  const host = window.location.hostname;
+  if (host.includes('bilibili.com')) return 'bilibili';
+  if (host.includes('youtube.com')) return 'youtube';
+  return 'unknown';
+}
+
+async function handleExtractYouTube(language: string) {
+  const p = getPanel();
+
+  const { videoInfo, result, tracks, debug } = await extractYouTubeSubtitles(language);
+
+  p.log(`Track count: ${debug.trackCount}`, 'info');
+  if (debug.allTracks) p.log(`Available: ${debug.allTracks}`, 'info');
+
+  if (!videoInfo) {
+    p.log('Could not find ytInitialPlayerResponse on this page.', 'error');
+    p.log(`URL: ${window.location.href}`, 'info');
+    p.log('Hint: try refreshing the page (SPA navigation may stale the player response)', 'warn');
+    return;
+  }
+
+  p.log(`videoId=${videoInfo.youtubeVideoId}`, 'success');
+  p.log(`Title: ${videoInfo.title}`, 'info');
+  currentVideoInfo = videoInfo;
+
+  if (!result || result.items.length === 0) {
+    if (debug.trackCount === 0) {
+      p.log('No subtitle tracks found. Falling back to backend Whisper transcription...', 'warn');
+
+      const online = await checkBackendHealth(p);
+      if (!online) {
+        p.log('Backend service is offline — cannot fallback to transcription.', 'error');
+        p.log('Start the backend: ./start-server.sh', 'warn');
+        return;
+      }
+
+      const videoUrl = `https://www.youtube.com/watch?v=${videoInfo.youtubeVideoId}`;
+      p.log(`Step 2: Requesting backend Whisper transcription...`, 'step');
+      p.log('Backend will use: yt-dlp → Whisper (this may take a while)', 'info');
+
+      let waitSeconds = 0;
+      const waitTimer = setInterval(() => {
+        waitSeconds += 10;
+        p.log(`Still waiting for backend... (${waitSeconds}s elapsed)`, 'info');
+      }, 10000);
+      (window as unknown as Record<string, unknown>).__bennuWaitTimer = waitTimer;
+
+      chrome.runtime.sendMessage(
+        { type: 'TRANSCRIPT_REQUEST', bvid: '', language, videoUrl },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            clearInterval(waitTimer);
+            p.log(`Failed to send transcript request: ${chrome.runtime.lastError.message}`, 'error');
+          } else {
+            p.log('Transcript request sent. Waiting for backend response...', 'info');
+          }
+        },
+      );
+    } else {
+      p.log(`No "${language}" subtitles found. Available: ${debug.allTracks}`, 'warn');
+    }
+    return;
+  }
+
+  p.log(`Using: ${debug.chosenTrack}${debug.usedTranslation ? ' (translated)' : ''}`, 'success');
+  p.log(`${result.items.length} subtitle entries`, 'success');
+  currentItems = result.items;
+  p.setSubtitles(result.items, result.source);
+}
+
 async function handleExtract(language: string) {
   const p = getPanel();
   p.show();
   p.log('--- New extraction started ---', 'step');
   p.log(`Target language: ${language}`, 'info');
+
+  const platform = detectPlatform();
+  p.log(`Platform: ${platform}`, 'info');
+
+  if (platform === 'youtube') {
+    await handleExtractYouTube(language);
+    return;
+  }
 
   // Check backend health in background (non-blocking, just updates status dot)
   checkBackendHealth(p);

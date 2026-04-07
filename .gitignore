@@ -7,3 +7,8 @@ server/config.json
 __pycache__/
 *.pyc
 *.pyo
+
+.claude/
+
+.obsidian/
+ 

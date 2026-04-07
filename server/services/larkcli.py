@@ -2,8 +2,6 @@
 import subprocess
 import json
 import logging
-import shutil
-
 logger = logging.getLogger(__name__)
 
 
@@ -12,10 +10,6 @@ class LarkCliError(Exception):
     def __init__(self, message: str, returncode: int = 1):
         super().__init__(message)
         self.returncode = returncode
-
-
-def is_installed() -> bool:
-    return shutil.which("lark-cli") is not None
 
 
 def run(*args: str, timeout: int = 60) -> dict:

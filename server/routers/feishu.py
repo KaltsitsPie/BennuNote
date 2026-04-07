@@ -1,7 +1,6 @@
 # server/routers/feishu.py
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
-from typing import Optional
 import tempfile
 import os
 
@@ -271,6 +270,10 @@ def legacy_write_feishu(req: LegacyWriteFeishuRequest):
             lines.append(f"- UP主: {owner_name}")
     if bvid:
         lines.append(f"- 原始链接: [Bilibili](https://www.bilibili.com/video/{bvid})")
+    else:
+        video_url = vi.get("videoUrl", "")
+        if video_url:
+            lines.append(f"- 原始链接: [YouTube]({video_url})")
 
     # Subtitles section — folded heading with lark-table
     lines.append('## 字幕 {folded="true"}')

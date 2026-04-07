@@ -18,6 +18,7 @@ export interface TranscriptRequest {
   type: 'TRANSCRIPT_REQUEST';
   bvid: string;
   language: string;
+  videoUrl?: string;  // explicit URL for non-Bilibili sources (e.g. YouTube)
 }
 
 // Background → Content Script: backend transcription result
@@ -39,6 +40,7 @@ export interface WriteFeishuRequest {
     ownerName?: string;
     ownerMid?: number;
     coverUrl?: string;
+    videoUrl?: string;  // full canonical URL for YouTube (or any non-Bilibili source)
   };
   targetDocToken?: string;
 }

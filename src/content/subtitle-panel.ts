@@ -885,6 +885,8 @@ export class SubtitlePanel {
       cc: 'CC Subtitle',
       whisper: 'Whisper',
       bcut_asr: 'Bcut ASR',
+      yt_cc: 'YouTube CC',
+      yt_auto: 'YouTube Auto',
     };
     this.sourceBadge.textContent = sourceLabels[source];
     this.sourceBadge.style.display = '';

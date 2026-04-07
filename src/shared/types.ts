@@ -5,16 +5,18 @@ export interface SubtitleItem {
 }
 
 export interface VideoInfo {
-  bvid: string;
-  cid: number;
+  bvid: string;       // '' for YouTube
+  cid: number;        // 0 for YouTube
   title: string;
   partTitle?: string;
   ownerName?: string;
   ownerMid?: number;
   coverUrl?: string;
+  platform?: 'bilibili' | 'youtube';  // undefined means bilibili (backward compat)
+  youtubeVideoId?: string;             // e.g. "dQw4w9WgXcQ"
 }
 
-export type SubtitleSource = 'ai' | 'cc' | 'whisper' | 'bcut_asr';
+export type SubtitleSource = 'ai' | 'cc' | 'whisper' | 'bcut_asr' | 'yt_cc' | 'yt_auto';
 
 export interface SubtitleResult {
   source: SubtitleSource;

@@ -1,12 +1,13 @@
 import os
 import time
 import logging
+from typing import Optional
 from faster_whisper import WhisperModel
 
 logger = logging.getLogger("bennunote.whisper")
 
-_model: WhisperModel | None = None
-_model_size: str | None = None
+_model: Optional[WhisperModel] = None
+_model_size: Optional[str] = None
 
 
 def get_model(size: str = "small") -> WhisperModel:
@@ -20,7 +21,7 @@ def get_model(size: str = "small") -> WhisperModel:
     return _model
 
 
-def transcribe_audio(audio_path: str, model_size: str = "small", language: str = "zh") -> list[dict]:
+def transcribe_audio(audio_path: str, model_size: str = "small", language: str = "zh") -> list:
     """Transcribe an audio file and return list of {from, to, content} dicts."""
     file_size_mb = os.path.getsize(audio_path) / 1024 / 1024
     logger.info("Transcription start: path=%s, size=%.1fMB, language=%s", audio_path, file_size_mb, language)

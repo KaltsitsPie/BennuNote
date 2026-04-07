@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 import subprocess
 import logging
@@ -15,7 +16,8 @@ router = APIRouter()
 
 
 class TranscriptRequest(BaseModel):
-    bvid: str
+    bvid: str = ""
+    video_url: str = ""  # explicit URL (e.g. YouTube); takes priority over bvid
     model_size: str = "small"
     cookie: str = ""
     language: str = "zh"
@@ -30,19 +32,24 @@ class TranscriptResponse(BaseModel):
 
 @router.post("/transcript", response_model=TranscriptResponse)
 def transcript(req: TranscriptRequest):
-    logger.info("Transcript request: bvid=%s, model_size=%s, language=%s", req.bvid, req.model_size, req.language)
+    url = req.video_url if req.video_url else f"https://www.bilibili.com/video/{req.bvid}"
+    is_youtube = "youtube.com" in url or "youtu.be" in url
+    logger.info("Transcript request: url=%s, model_size=%s, language=%s", url, req.model_size, req.language)
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             audio_path = os.path.join(tmpdir, "audio.m4a")
-            url = f"https://www.bilibili.com/video/{req.bvid}"
 
             cmd = [
-                "yt-dlp",
+                sys.executable, "-m", "yt_dlp",
                 "-f", "ba",  # best audio
                 "-o", audio_path,
                 "--no-playlist",
             ]
+            if is_youtube:
+                # YouTube forces SABR streaming on the web client (yt-dlp#12482).
+                # ios and web_creator clients still serve direct audio URLs.
+                cmd.extend(["--extractor-args", "youtube:player_client=ios,web_creator,default"])
             if req.cookie:
                 cookie_file = os.path.join(tmpdir, "cookies.txt")
                 with open(cookie_file, "w") as f:
@@ -54,8 +61,8 @@ def transcript(req: TranscriptRequest):
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             except FileNotFoundError:
-                logger.error("yt-dlp binary not found on PATH")
-                raise HTTPException(status_code=500, detail="yt-dlp is not installed. Run: pip install yt-dlp")
+                logger.error("Python executable not found: %s", sys.executable)
+                raise HTTPException(status_code=500, detail="Python executable not found")
             except subprocess.TimeoutExpired:
                 logger.error("yt-dlp timed out after 120s")
                 raise HTTPException(status_code=504, detail="yt-dlp timed out downloading audio")
@@ -67,7 +74,8 @@ def transcript(req: TranscriptRequest):
 
             if result.returncode != 0:
                 logger.error("yt-dlp failed with code %d", result.returncode)
-                raise HTTPException(status_code=500, detail=f"yt-dlp failed: {result.stderr[:500]}")
+                # Show last 800 chars — warnings appear first, actual error is at the end
+                raise HTTPException(status_code=500, detail=f"yt-dlp failed: {result.stderr[-800:]}")
 
             if not os.path.exists(audio_path):
                 # yt-dlp may add extension automatically
@@ -82,16 +90,22 @@ def transcript(req: TranscriptRequest):
             file_size_mb = os.path.getsize(audio_path) / 1024 / 1024
             logger.info("Audio downloaded: %s (%.1fMB)", audio_path, file_size_mb)
 
-            # Try Bcut ASR first, fall back to Whisper
-            source = "bcut_asr"
-            try:
-                logger.info("Trying Bcut ASR...")
-                items = transcribe_via_bcut(audio_path)
-                logger.info("Bcut ASR succeeded: %d segments", len(items))
-            except (BcutASRError, Exception) as e:
-                logger.warning("Bcut ASR failed (%s), falling back to Whisper...", e)
+            # YouTube: go straight to Whisper (Bcut ASR is Bilibili-specific)
+            # Bilibili: try Bcut ASR first, fall back to Whisper
+            if is_youtube:
+                logger.info("YouTube URL detected — using Whisper directly")
                 source = "whisper"
                 items = transcribe_audio(audio_path, req.model_size, req.language)
+            else:
+                source = "bcut_asr"
+                try:
+                    logger.info("Trying Bcut ASR...")
+                    items = transcribe_via_bcut(audio_path)
+                    logger.info("Bcut ASR succeeded: %d segments", len(items))
+                except (BcutASRError, Exception) as e:
+                    logger.warning("Bcut ASR failed (%s), falling back to Whisper...", e)
+                    source = "whisper"
+                    items = transcribe_audio(audio_path, req.model_size, req.language)
 
         full_text = "\n".join(item["content"] for item in items)
         duration = items[-1]["to"] if items else 0.0

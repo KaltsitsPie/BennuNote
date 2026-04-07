@@ -7,6 +7,7 @@
   "host_permissions": [
     "*://*.bilibili.com/*",
     "*://*.hdslb.com/*",
+    "*://*.youtube.com/*",
     "http://localhost:2185/*",
     "https://api.anthropic.com/*",
     "https://api.openai.com/*",
@@ -38,6 +39,17 @@
     },
     {
       "matches": ["*://*.bilibili.com/video/*"],
+      "js": ["src/content/index.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.youtube.com/watch*"],
+      "js": ["src/content/youtube-page-bridge.ts"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.youtube.com/watch*"],
       "js": ["src/content/index.ts"],
       "run_at": "document_idle"
     }
