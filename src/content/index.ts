@@ -118,7 +118,9 @@ function getPanel(): SubtitlePanel {
             // Update cross-session map
             try {
               if (videoId) {
-                const docToken = parseFeishuToken(response.docUrl) || response.docUrl;
+                const parsedToken = parseFeishuToken(response.docUrl);
+                if (!parsedToken) console.warn('BennuNote: Could not parse doc token from URL, storing full URL:', response.docUrl);
+                const docToken = parsedToken || response.docUrl;
                 const summaryAppended = appendSummaryOnly || !!summaryText;
                 await writeVideoDocEntry(videoId, { docToken, summaryAppended });
               }

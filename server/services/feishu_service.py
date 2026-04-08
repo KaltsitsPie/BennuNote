@@ -330,8 +330,10 @@ def legacy_write_feishu(text: str, title: str, items: list, target_doc_token: st
         result = update_doc(doc=target_doc_token, mode="append",
                             markdown=f"## 摘要\n\n{summary}\n")
         doc_url = (result.get("data", {}).get("doc_url", "")
-                   or result.get("doc_url", "")
-                   or f"https://www.feishu.cn/wiki/{target_doc_token}")
+                   or result.get("doc_url", ""))
+        if not doc_url:
+            logger.warning("append_summary_only: update_doc returned no doc_url; using synthetic URL for doc=%s", target_doc_token)
+            doc_url = f"https://www.feishu.cn/wiki/{target_doc_token}"
         return {"doc_url": doc_url}
 
     bvid = vi.get("bvid", "")

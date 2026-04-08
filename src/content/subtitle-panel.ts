@@ -76,7 +76,7 @@ export class SubtitlePanel {
   private logHourKey = ''; // current hour storage key
   private feishuLink!: HTMLElement;
   private feishuUrl!: HTMLAnchorElement;
-  private onSyncFeishu: (() => void) | null = null;
+  private onSyncFeishu: (() => void | Promise<void>) | null = null;
   private onSummarize: (() => void) | null = null;
   private videoInfo: VideoInfo | null = null;
   private feishuOptionsEl: HTMLElement | null = null;
@@ -1416,7 +1416,7 @@ export class SubtitlePanel {
     this.onSyncFeishu?.();
   }
 
-  setSyncHandler(handler: () => void) {
+  setSyncHandler(handler: () => void | Promise<void>) {
     this.onSyncFeishu = handler;
   }
 
