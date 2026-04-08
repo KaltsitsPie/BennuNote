@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import health, transcript, feishu, summarize
@@ -30,14 +30,18 @@ app.include_router(summarize.router)
 # Legacy root-level /write_feishu for backward compat during migration
 from routers.feishu import LegacyWriteFeishuRequest
 from services.feishu_service import legacy_write_feishu
+from services.larkcli import LarkCliError
 
 @app.post("/write_feishu")
 def root_write_feishu(req: LegacyWriteFeishuRequest):
-    return legacy_write_feishu(
-        text=req.text, title=req.title, items=req.items or [],
-        target_doc_token=req.target_doc_token or '',
-        video_info=req.video_info or {}, wiki_node=req.wiki_node or ''
-    )
+    try:
+        return legacy_write_feishu(
+            text=req.text, title=req.title, items=req.items or [],
+            target_doc_token=req.target_doc_token or '',
+            video_info=req.video_info or {}, wiki_node=req.wiki_node or ''
+        )
+    except LarkCliError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

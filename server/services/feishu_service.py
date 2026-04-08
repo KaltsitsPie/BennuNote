@@ -2,7 +2,13 @@
 """Feishu service — all operations via lark-cli subprocess."""
 import json
 import logging
+import os
+import re
+import tempfile
+import time
 from datetime import datetime, timezone, timedelta
+
+import requests as http_requests
 
 from services.larkcli import run, get_auth_status, LarkCliError
 
@@ -121,7 +127,7 @@ def _build_info_table(vi: dict, bvid: str) -> str:
     else:
         pubdate_cell = ""
 
-    desc_cell = desc or ""
+    desc_cell = re.sub(r" {2,}", " ", (desc or "").replace("\r", " ").replace("\n", " "))
 
     rows = [
         ("Up主", owner_cell),
@@ -169,7 +175,7 @@ def _build_subtitle_table(items: list[dict]) -> str:
     ]
     for item in items:
         from_sec = item.get("from", 0)
-        content = item.get("content", "")
+        content = re.sub(r" {2,}", " ", str(item.get("content", "")).replace("\r", " ").replace("\n", " "))
         lines += [
             "  <lark-tr>",
             "    <lark-td>",
@@ -222,11 +228,94 @@ def _ensure_root_link(wiki_node: str, doc_url: str, title: str, obj_token: str =
         if (obj_token and obj_token in root_md) or wiki_token in root_md:
             logger.info("Root doc already contains link (obj=%s, wiki=%s), skipping", obj_token, wiki_token)
             return
-        mention = f'<mention-doc token="{wiki_token}" type="wiki">{title}</mention-doc>\n'
+        mention = f'### <mention-doc token="{wiki_token}" type="wiki">{title}</mention-doc>\n'
         update_doc(doc=wiki_node, mode="append", markdown=mention)
         logger.info("Appended link to root doc: %s (obj=%s)", wiki_token, obj_token)
     except LarkCliError as e:
         logger.warning("Failed to update root doc with link: %s", e)
+
+
+def _download_and_insert_cover(doc_token: str, cover_url: str) -> str:
+    """Download a cover image from URL and insert it into the Feishu doc via media API.
+
+    Returns empty string on success, or an error message on failure.
+    """
+    full_url = f"https:{cover_url}" if cover_url.startswith("//") else cover_url
+    try:
+        resp = http_requests.get(full_url, timeout=30, allow_redirects=True)
+        resp.raise_for_status()
+    except Exception as e:
+        msg = f"Failed to download cover image from {full_url}: {e}"
+        logger.warning(msg)
+        return msg
+
+    content_type = resp.headers.get("content-type", "")
+    if "jpeg" in content_type or "jpg" in content_type:
+        suffix = ".jpg"
+    elif "png" in content_type:
+        suffix = ".png"
+    elif "webp" in content_type:
+        suffix = ".webp"
+    else:
+        suffix = ".jpg"
+
+    # lark-cli requires a relative file path within cwd (server dir)
+    server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tmp_name = f".cover_tmp{suffix}"
+    tmp_path = os.path.join(server_dir, tmp_name)
+    try:
+        with open(tmp_path, "wb") as f:
+            f.write(resp.content)
+        insert_media(doc_token, tmp_name, file_type="image")
+        logger.info("Inserted cover image into doc %s from %s (%d bytes)",
+                     doc_token, full_url, len(resp.content))
+        return ""
+    except Exception as e:
+        msg = f"Failed to insert cover image into doc {doc_token}: {e}"
+        logger.warning(msg)
+        return msg
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def _append_chunks_with_retry(
+    doc_token: str,
+    chunks: list[str],
+    max_retries: int = 2,
+    backoff_base: float = 2.0,
+) -> dict:
+    """Append subtitle chunks to a doc with retry and best-effort continuation."""
+    total = len(chunks)
+    succeeded = 0
+    errors: list[str] = []
+
+    for idx, chunk in enumerate(chunks):
+        last_err = None
+        for attempt in range(max_retries + 1):
+            try:
+                update_doc(doc=doc_token, mode="append", markdown=chunk)
+                succeeded += 1
+                last_err = None
+                break
+            except LarkCliError as e:
+                last_err = e
+                if attempt < max_retries:
+                    wait = backoff_base ** (attempt + 1)
+                    logger.warning(
+                        "Chunk %d/%d append failed (attempt %d/%d): %s — retrying in %.1fs",
+                        idx + 1, total, attempt + 1, max_retries + 1, e, wait,
+                    )
+                    time.sleep(wait)
+                else:
+                    logger.error(
+                        "Chunk %d/%d append failed after %d attempts: %s",
+                        idx + 1, total, max_retries + 1, e,
+                    )
+        if last_err:
+            errors.append(f"Batch {idx + 1}/{total}: {last_err}")
+
+    return {"succeeded": succeeded, "failed": total - succeeded, "total": total, "errors": errors}
 
 
 def legacy_write_feishu(text: str, title: str, items: list, target_doc_token: str,
@@ -237,11 +326,8 @@ def legacy_write_feishu(text: str, title: str, items: list, target_doc_token: st
     video_title = vi.get("title", title)
     cover_url = vi.get("coverUrl", vi.get("cover_url", ""))
 
-    # Step 1: Build header + info markdown (without subtitles)
+    # Step 1: Build header + info markdown (without cover — cover inserted via media API)
     header_lines = [f"# {video_title}"]
-    if cover_url:
-        full_url = f"https:{cover_url}" if cover_url.startswith("//") else cover_url
-        header_lines.append(f"![cover]({full_url})")
     header_lines += ["", "## 主要信息", ""]
     header_lines.append(_build_info_table(vi, bvid))
     header_lines.append("")
@@ -263,29 +349,47 @@ def legacy_write_feishu(text: str, title: str, items: list, target_doc_token: st
         subtitle_chunks.append(f"## 字幕\n\n{text}\n")
 
     resolved_wiki_node = wiki_node or target_doc_token or ""
+    cover_error = ""
 
-    # Create doc with header + info only
-    if resolved_wiki_node and not target_doc_token:
-        result = create_doc(markdown=header_md, title=title, wiki_node=resolved_wiki_node)
-    elif target_doc_token:
+    # --- Append-to-existing-doc path ---
+    if target_doc_token:
         result = update_doc(doc=target_doc_token, mode="append", markdown=header_md)
+        if cover_url:
+            cover_error = _download_and_insert_cover(target_doc_token, cover_url)
         doc_url = result.get("data", {}).get("doc_url", "") or result.get("doc_url", "")
-        for chunk in subtitle_chunks:
-            update_doc(doc=target_doc_token, mode="append", markdown=chunk)
-        # Ensure link in root doc (no doc_id — let it resolve from wiki token)
+        chunk_result = _append_chunks_with_retry(target_doc_token, subtitle_chunks)
         target_url = doc_url or f"https://www.feishu.cn/wiki/{target_doc_token}"
         if wiki_node:
             _ensure_root_link(wiki_node, target_url, video_title)
-        return {"doc_url": doc_url}
+        return {
+            "doc_url": doc_url,
+            "subtitle_batches_total": chunk_result["total"],
+            "subtitle_batches_succeeded": chunk_result["succeeded"],
+            "subtitle_batches_failed": chunk_result["failed"],
+            "subtitle_errors": chunk_result["errors"],
+            "cover_error": cover_error,
+        }
+
+    # --- Create-new-doc path ---
+    if resolved_wiki_node and not target_doc_token:
+        result = create_doc(markdown=header_md, title=title, wiki_node=resolved_wiki_node)
     else:
         result = create_doc(markdown=header_md, title=title)
 
     doc_url = result.get("data", {}).get("doc_url", "") or result.get("doc_url", "")
     doc_id = result.get("data", {}).get("doc_id", "")
+    chunk_result = {"succeeded": 0, "failed": 0, "total": 0, "errors": []}
     if doc_id:
-        for chunk in subtitle_chunks:
-            update_doc(doc=doc_id, mode="append", markdown=chunk)
-    # Ensure link in root doc (doc_id from create IS the obj_token)
+        if cover_url:
+            cover_error = _download_and_insert_cover(doc_id, cover_url)
+        chunk_result = _append_chunks_with_retry(doc_id, subtitle_chunks)
     if resolved_wiki_node and doc_url:
         _ensure_root_link(resolved_wiki_node, doc_url, video_title, obj_token=doc_id)
-    return {"doc_url": doc_url}
+    return {
+        "doc_url": doc_url,
+        "subtitle_batches_total": chunk_result["total"],
+        "subtitle_batches_succeeded": chunk_result["succeeded"],
+        "subtitle_batches_failed": chunk_result["failed"],
+        "subtitle_errors": chunk_result["errors"],
+        "cover_error": cover_error,
+    }

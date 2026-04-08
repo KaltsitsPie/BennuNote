@@ -71,6 +71,31 @@ def post_create_wiki_space(req: CreateWikiSpaceRequest):
         _handle_error(e)
 
 
+@router.get("/wiki/node-info")
+def get_wiki_node_info(token: str):
+    """Resolve a wiki node token to its space name."""
+    try:
+        # Get node info (returns space_id, title, etc.)
+        node_result = run("api", "GET", "/open-apis/wiki/v2/spaces/get_node",
+                          "--params", json.dumps({"token": token}))
+        node = node_result.get("data", {}).get("node", {})
+        space_id = node.get("space_id", "")
+        if not space_id:
+            return {"space_id": "", "space_name": "", "node_title": node.get("title", "")}
+
+        # Get space info to find the name
+        spaces = list_wiki_spaces()
+        space_name = ""
+        for space in spaces.get("data", {}).get("items", []):
+            if space.get("space_id") == space_id:
+                space_name = space.get("name", "")
+                break
+
+        return {"space_id": space_id, "space_name": space_name, "node_title": node.get("title", "")}
+    except LarkCliError as e:
+        _handle_error(e)
+
+
 @router.get("/wiki/nodes")
 def get_wiki_nodes(space_id: str, parent_node_token: str = ""):
     try:
@@ -155,14 +180,18 @@ async def post_media_insert(
 ):
     try:
         suffix = os.path.splitext(file.filename or "upload")[1] or ".png"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp_path = tmp.name
+        # lark-cli requires a relative file path within cwd (server dir)
+        server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        tmp_name = f".media_tmp{suffix}"
+        tmp_path = os.path.join(server_dir, tmp_name)
+        content = await file.read()
+        with open(tmp_path, "wb") as f:
+            f.write(content)
         try:
-            result = insert_media(doc, tmp_path, file_type, align, caption)
+            result = insert_media(doc, tmp_name, file_type, align, caption)
         finally:
-            os.unlink(tmp_path)
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
         return result
     except LarkCliError as e:
         _handle_error(e)
