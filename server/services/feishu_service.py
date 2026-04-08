@@ -326,6 +326,7 @@ def legacy_write_feishu(text: str, title: str, items: list, target_doc_token: st
 
     # Fast-path: caller already synced subtitles; only append summary section.
     if append_summary_only and target_doc_token:
+        logger.info("append_summary_only fast-path: doc=%s", target_doc_token)
         result = update_doc(doc=target_doc_token, mode="append",
                             markdown=f"## 摘要\n\n{summary}\n")
         doc_url = (result.get("data", {}).get("doc_url", "")

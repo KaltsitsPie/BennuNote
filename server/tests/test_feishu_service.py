@@ -34,8 +34,8 @@ def test_append_summary_only_calls_update_doc_with_summary_markdown():
     mock_create.assert_not_called()
     mock_chunks.assert_not_called()
     mock_update.assert_called_once()
-    call_kwargs = mock_update.call_args
-    markdown_arg = call_kwargs.kwargs.get("markdown") or (call_kwargs.args[2] if len(call_kwargs.args) > 2 else "")
+    _, call_kw = mock_update.call_args
+    markdown_arg = call_kw["markdown"]
     assert "## 摘要" in markdown_arg
     assert "这是摘要内容。" in markdown_arg
     assert result["doc_url"] != ""
@@ -56,6 +56,7 @@ def test_append_summary_only_without_doc_token_falls_through_to_create():
             summary="摘要", append_summary_only=True,
         )
 
+    mock_update.assert_not_called()
     mock_create.assert_called_once()
     assert result["doc_url"] != ""
 
