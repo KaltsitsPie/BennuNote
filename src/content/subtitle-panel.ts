@@ -1001,6 +1001,7 @@ export class SubtitlePanel {
   }
 
   private showSummarizeButton() {
+    this.summaryText = '';
     this.setSummaryState('empty');
     this.summaryTextEl.innerHTML = '';
     this.summaryActionsEl.style.display = '';
