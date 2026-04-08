@@ -103,6 +103,8 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
             target_doc_token: msg.targetDocToken || '',
             video_info: msg.videoInfo || { bvid: '', title: msg.title },
             wiki_node: config.feishuWikiRootNodeToken || '',
+            summary: msg.summary || '',
+            append_summary_only: msg.appendSummaryOnly || false,
           }),
         });
         const data = await resp.json();
