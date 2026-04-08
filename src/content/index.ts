@@ -3,13 +3,32 @@ import { extractYouTubeSubtitles, setYtLogFn } from './youtube-api';
 import { SubtitlePanel } from './subtitle-panel';
 import type { Message } from '../shared/messages';
 import type { SubtitleItem, VideoInfo } from '../shared/types';
-import { getConfig } from '../shared/utils';
+import { getConfig, parseFeishuToken } from '../shared/utils';
 
 let panel: SubtitlePanel | null = null;
 let currentVideoInfo: VideoInfo | null = null;
 let currentItems: SubtitleItem[] = [];
 let backendOnline = false;
 let currentReqId = '';
+
+// --- Video doc map (cross-session persistence for Feishu doc tokens) ---
+
+type VideoDocEntry = { docToken: string; summaryAppended: boolean };
+
+function getVideoId(info: VideoInfo): string {
+  return info.bvid || info.youtubeVideoId || '';
+}
+
+async function readVideoDocMap(): Promise<Record<string, VideoDocEntry>> {
+  const data = await chrome.storage.local.get('bennunote_video_docs');
+  return (data.bennunote_video_docs as Record<string, VideoDocEntry>) || {};
+}
+
+async function writeVideoDocEntry(videoId: string, entry: VideoDocEntry): Promise<void> {
+  const map = await readVideoDocMap();
+  map[videoId] = entry;
+  await chrome.storage.local.set({ bennunote_video_docs: map });
+}
 
 function getPanel(): SubtitlePanel {
   if (!panel) {
@@ -18,16 +37,43 @@ function getPanel(): SubtitlePanel {
     setLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
     setYtLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
 
-    panel.setSyncHandler(() => {
+    panel.setSyncHandler(async () => {
       if (!currentVideoInfo || !panel) return;
       const p = panel!;
+      const videoId = getVideoId(currentVideoInfo);
+      const summaryText = p.getSummaryText();
+
+      // Read cross-session map
+      const map = await readVideoDocMap();
+      const entry = videoId ? map[videoId] : undefined;
+
+      // Determine target doc token: footer input overrides map
+      const footerToken = p.getWikiDocLink() || undefined;
+      const mapToken = entry?.docToken;
+      const targetDocToken = footerToken || mapToken;
+
+      // Branch: append summary only?
+      const appendSummaryOnly = !footerToken && !!mapToken && !!summaryText && !entry?.summaryAppended;
+
+      // Guard: nothing new to sync
+      if (targetDocToken && !appendSummaryOnly && !footerToken) {
+        if (!summaryText) {
+          p.showToast('已同步字幕，生成摘要后可再次同步', 'warn');
+          return;
+        }
+        if (entry?.summaryAppended) {
+          p.showToast('字幕和摘要均已同步', 'warn');
+          return;
+        }
+      }
+
       p.setFeishuSyncing(true);
-      p.log('Syncing subtitles to Feishu Wiki...', 'step');
+      p.log(appendSummaryOnly ? 'Appending summary to Feishu doc...' : 'Syncing to Feishu Wiki...', 'step');
+
       const merged = p.getMergedItems();
       const text = merged.map(i => i.content).join('\n');
       const items = merged.map(i => ({ from: i.from, to: i.to, content: i.content }));
       const title = `${currentVideoInfo!.title} - ${new Date().toLocaleDateString('zh-CN')}`;
-      const targetDocToken = p.getWikiDocLink() || undefined;
       const youtubeUrl =
         currentVideoInfo!.platform === 'youtube' && currentVideoInfo!.youtubeVideoId
           ? `https://www.youtube.com/watch?v=${currentVideoInfo!.youtubeVideoId}`
@@ -42,9 +88,19 @@ function getPanel(): SubtitlePanel {
         desc: currentVideoInfo!.desc,
         videoUrl: youtubeUrl,
       };
+
       chrome.runtime.sendMessage(
-        { type: 'WRITE_FEISHU', text, title, items, videoInfo, targetDocToken },
-        (response) => {
+        {
+          type: 'WRITE_FEISHU',
+          text,
+          title,
+          items,
+          videoInfo,
+          targetDocToken,
+          summary: summaryText || undefined,
+          appendSummaryOnly,
+        },
+        async (response) => {
           p.setFeishuSyncing(false);
           if (chrome.runtime.lastError) {
             const errMsg = chrome.runtime.lastError.message || 'Unknown error';
@@ -53,13 +109,19 @@ function getPanel(): SubtitlePanel {
             return;
           }
           if (response?.success && response.docUrl) {
-            p.log('Feishu sync successful!', 'success');
-            if (response.warning) {
-              p.log(`Warning: ${response.warning}`, 'warn');
-            }
-            p.showToast('Synced to Feishu', 'success', 3000);
+            p.log(appendSummaryOnly ? 'Summary appended to Feishu!' : 'Feishu sync successful!', 'success');
+            if (response.warning) p.log(`Warning: ${response.warning}`, 'warn');
+            p.showToast(appendSummaryOnly ? 'Summary synced to Feishu' : 'Synced to Feishu', 'success', 3000);
             p.showFeishuLink(response.docUrl);
-            if (!targetDocToken) {
+
+            // Update cross-session map
+            if (videoId) {
+              const docToken = parseFeishuToken(response.docUrl) || response.docUrl;
+              const summaryAppended = appendSummaryOnly || !!summaryText;
+              await writeVideoDocEntry(videoId, { docToken, summaryAppended });
+            }
+
+            if (!targetDocToken && !appendSummaryOnly) {
               window.open(response.docUrl, '_blank');
             }
           } else {
