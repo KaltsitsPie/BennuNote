@@ -1217,6 +1217,10 @@ export class SubtitlePanel {
       }
     }
 
+    if (this.summaryText) {
+      lines.push('', '## 摘要', '', this.summaryText);
+    }
+
     lines.push('');
     return lines.join('\n');
   }
@@ -1232,8 +1236,8 @@ export class SubtitlePanel {
     try {
       const videoTitle = this.videoInfo?.title || 'subtitle';
       const safeTitle = videoTitle.replace(/[/\\:*?"<>|]/g, '_');
-      const date = new Date().toLocaleDateString('zh-CN');
-      const filename = `${safeTitle} - ${date}.md`;
+      const videoId = this.videoInfo?.bvid || this.videoInfo?.youtubeVideoId || '';
+      const filename = videoId ? `${safeTitle} - ${videoId}.md` : `${safeTitle}.md`;
       const content = this.buildFeishuMarkdown();
 
       // showSaveFilePicker: works with all folders (including Downloads),
