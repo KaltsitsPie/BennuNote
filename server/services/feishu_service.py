@@ -319,9 +319,20 @@ def _append_chunks_with_retry(
 
 
 def legacy_write_feishu(text: str, title: str, items: list, target_doc_token: str,
-                        video_info: dict, wiki_node: str) -> dict:
+                        video_info: dict, wiki_node: str,
+                        summary: str = "", append_summary_only: bool = False) -> dict:
     """Assembles markdown from video_info + subtitle items, creates Feishu doc."""
     vi = video_info
+
+    # Fast-path: caller already synced subtitles; only append summary section.
+    if append_summary_only and target_doc_token:
+        result = update_doc(doc=target_doc_token, mode="append",
+                            markdown=f"## 摘要\n\n{summary}\n")
+        doc_url = (result.get("data", {}).get("doc_url", "")
+                   or result.get("doc_url", "")
+                   or f"https://www.feishu.cn/wiki/{target_doc_token}")
+        return {"doc_url": doc_url}
+
     bvid = vi.get("bvid", "")
     video_title = vi.get("title", title)
     cover_url = vi.get("coverUrl", vi.get("cover_url", ""))
@@ -347,6 +358,9 @@ def legacy_write_feishu(text: str, title: str, items: list, target_doc_token: st
             subtitle_chunks.append("\n".join(chunk_lines))
     elif text:
         subtitle_chunks.append(f"## 字幕\n\n{text}\n")
+
+    if summary:
+        subtitle_chunks.append(f"## 摘要\n\n{summary}\n")
 
     resolved_wiki_node = wiki_node or target_doc_token or ""
     cover_error = ""

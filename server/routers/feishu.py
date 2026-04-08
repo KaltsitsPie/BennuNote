@@ -222,6 +222,8 @@ class LegacyWriteFeishuRequest(BaseModel):
     target_doc_token: str = ""
     video_info: dict = {}
     wiki_node: str = ""
+    summary: str = ""
+    append_summary_only: bool = False
 
 
 @router.post("/write")
@@ -230,7 +232,9 @@ def post_legacy_write_feishu(req: LegacyWriteFeishuRequest):
         return feishu_service.legacy_write_feishu(
             text=req.text, title=req.title, items=req.items or [],
             target_doc_token=req.target_doc_token or '',
-            video_info=req.video_info or {}, wiki_node=req.wiki_node or ''
+            video_info=req.video_info or {}, wiki_node=req.wiki_node or '',
+            summary=req.summary or '',
+            append_summary_only=req.append_summary_only,
         )
     except LarkCliError as e:
         _handle_error(e)

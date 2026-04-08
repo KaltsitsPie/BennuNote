@@ -38,7 +38,9 @@ def root_write_feishu(req: LegacyWriteFeishuRequest):
         return legacy_write_feishu(
             text=req.text, title=req.title, items=req.items or [],
             target_doc_token=req.target_doc_token or '',
-            video_info=req.video_info or {}, wiki_node=req.wiki_node or ''
+            video_info=req.video_info or {}, wiki_node=req.wiki_node or '',
+            summary=req.summary or '',
+            append_summary_only=req.append_summary_only,
         )
     except LarkCliError as e:
         raise HTTPException(status_code=500, detail=str(e))
