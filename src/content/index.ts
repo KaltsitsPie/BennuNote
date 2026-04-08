@@ -42,6 +42,7 @@ function getPanel(): SubtitlePanel {
       const p = panel!;
       const videoId = getVideoId(currentVideoInfo);
       const summaryText = p.getSummaryText();
+      p.setFeishuSyncing(true);
 
       // Read cross-session map
       const map = await readVideoDocMap();
@@ -59,15 +60,15 @@ function getPanel(): SubtitlePanel {
       if (targetDocToken && !appendSummaryOnly && !footerToken) {
         if (!summaryText) {
           p.showToast('已同步字幕，生成摘要后可再次同步', 'warn');
+          p.setFeishuSyncing(false);
           return;
         }
         if (entry?.summaryAppended) {
           p.showToast('字幕和摘要均已同步', 'warn');
+          p.setFeishuSyncing(false);
           return;
         }
       }
-
-      p.setFeishuSyncing(true);
       p.log(appendSummaryOnly ? 'Appending summary to Feishu doc...' : 'Syncing to Feishu Wiki...', 'step');
 
       const merged = p.getMergedItems();
@@ -101,11 +102,11 @@ function getPanel(): SubtitlePanel {
           appendSummaryOnly,
         },
         async (response) => {
-          p.setFeishuSyncing(false);
           if (chrome.runtime.lastError) {
             const errMsg = chrome.runtime.lastError.message || 'Unknown error';
             p.log(`Feishu sync failed: ${errMsg}`, 'error');
             p.showToast(`Sync failed: ${errMsg}`, 'error');
+            p.setFeishuSyncing(false);
             return;
           }
           if (response?.success && response.docUrl) {
@@ -115,11 +116,16 @@ function getPanel(): SubtitlePanel {
             p.showFeishuLink(response.docUrl);
 
             // Update cross-session map
-            if (videoId) {
-              const docToken = parseFeishuToken(response.docUrl) || response.docUrl;
-              const summaryAppended = appendSummaryOnly || !!summaryText;
-              await writeVideoDocEntry(videoId, { docToken, summaryAppended });
+            try {
+              if (videoId) {
+                const docToken = parseFeishuToken(response.docUrl) || response.docUrl;
+                const summaryAppended = appendSummaryOnly || !!summaryText;
+                await writeVideoDocEntry(videoId, { docToken, summaryAppended });
+              }
+            } catch (err) {
+              console.warn('BennuNote: Failed to persist video doc map:', err);
             }
+            p.setFeishuSyncing(false);
 
             if (!targetDocToken && !appendSummaryOnly) {
               window.open(response.docUrl, '_blank');
@@ -128,6 +134,7 @@ function getPanel(): SubtitlePanel {
             const errMsg = response?.error || 'Unknown error';
             p.log(`Feishu sync failed: ${errMsg}`, 'error');
             p.showToast(`Sync failed: ${errMsg}`, 'error');
+            p.setFeishuSyncing(false);
           }
         },
       );
