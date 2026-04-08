@@ -128,7 +128,9 @@ async function fetchYtJson3(url: string): Promise<SubtitleItem[]> {
   const fetchUrl = url.includes('fmt=json3') ? url : `${url}&fmt=json3`;
   const resp = await fetch(fetchUrl);
   if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching YouTube subtitles`);
-  const data = (await resp.json()) as { events?: YtJson3Event[] };
+  const text = await resp.text();
+  if (!text) throw new Error('Empty response from YouTube subtitle URL (token may be expired)');
+  const data = JSON.parse(text) as { events?: YtJson3Event[] };
   const events: YtJson3Event[] = data.events ?? [];
 
   return events
