@@ -37,6 +37,8 @@ export interface WriteFeishuRequest {
     videoUrl?: string;  // full canonical URL for YouTube (or any non-Bilibili source)
   };
   targetDocToken?: string;
+  summary?: string;             // AI-generated summary text
+  appendSummaryOnly?: boolean;  // true = only append ## 摘要 to existing doc
 }
 
 // Background → Content Script: Feishu write result
