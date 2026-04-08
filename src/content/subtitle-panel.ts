@@ -69,6 +69,7 @@ export class SubtitlePanel {
   private langBar!: HTMLElement;
   private items: SubtitleItem[] = [];
   private mergedItems: SubtitleItem[] = [];
+  private summaryText = '';
   private onTrackChange: ((track: SubtitleTrack) => void) | null = null;
   private logLines: string[] = [];
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1091,6 +1092,7 @@ export class SubtitlePanel {
   }
 
   setSummary(text: string) {
+    this.summaryText = text;
     this.setSummaryState('text');
     this.summaryTextEl.innerHTML = text
       .split('\n\n')
@@ -1138,6 +1140,10 @@ export class SubtitlePanel {
 
   getMergedItems(): SubtitleItem[] {
     return this.mergedItems;
+  }
+
+  getSummaryText(): string {
+    return this.summaryText;
   }
 
   private getPlainText(): string {
