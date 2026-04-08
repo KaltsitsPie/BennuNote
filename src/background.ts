@@ -107,7 +107,13 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
         });
         const data = await resp.json();
         if (resp.ok && data.doc_url) {
-          sendResponse({ type: 'WRITE_FEISHU_RESULT', success: true, docUrl: data.doc_url });
+          const warnings: string[] = [];
+          if (data.subtitle_batches_failed > 0)
+            warnings.push(`${data.subtitle_batches_succeeded}/${data.subtitle_batches_total} subtitle batches written`);
+          if (data.cover_error)
+            warnings.push(`Cover image failed: ${data.cover_error}`);
+          const warning = warnings.length > 0 ? warnings.join('; ') : undefined;
+          sendResponse({ type: 'WRITE_FEISHU_RESULT', success: true, docUrl: data.doc_url, warning });
         } else {
           sendResponse({ type: 'WRITE_FEISHU_RESULT', success: false, error: data.detail || 'Server error' });
         }

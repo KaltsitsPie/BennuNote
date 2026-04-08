@@ -47,17 +47,25 @@ function getPanel(): SubtitlePanel {
         (response) => {
           p.setFeishuSyncing(false);
           if (chrome.runtime.lastError) {
-            p.log(`Feishu sync failed: ${chrome.runtime.lastError.message}`, 'error');
+            const errMsg = chrome.runtime.lastError.message || 'Unknown error';
+            p.log(`Feishu sync failed: ${errMsg}`, 'error');
+            p.showToast(`Sync failed: ${errMsg}`, 'error');
             return;
           }
           if (response?.success && response.docUrl) {
             p.log('Feishu sync successful!', 'success');
+            if (response.warning) {
+              p.log(`Warning: ${response.warning}`, 'warn');
+            }
+            p.showToast('Synced to Feishu', 'success', 3000);
             p.showFeishuLink(response.docUrl);
             if (!targetDocToken) {
               window.open(response.docUrl, '_blank');
             }
           } else {
-            p.log(`Feishu sync failed: ${response?.error || 'Unknown error'}`, 'error');
+            const errMsg = response?.error || 'Unknown error';
+            p.log(`Feishu sync failed: ${errMsg}`, 'error');
+            p.showToast(`Sync failed: ${errMsg}`, 'error');
           }
         },
       );

@@ -80,6 +80,8 @@ export class SubtitlePanel {
   private videoInfo: VideoInfo | null = null;
   private feishuOptionsEl: HTMLElement | null = null;
   private footerButtonsEl: HTMLElement | null = null;
+  private toastEl!: HTMLElement;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -100,6 +102,11 @@ export class SubtitlePanel {
 
     this.shadow.appendChild(panel);
     this.panelEl = panel;
+
+    // Toast element for floating notifications
+    this.toastEl = document.createElement('div');
+    this.toastEl.className = 'bennu-toast';
+    panel.appendChild(this.toastEl);
 
     this.logEl = panel.querySelector('.bennu-log')!;
     this.listEl = panel.querySelector('.bennu-subtitle-list')!;
@@ -207,12 +214,19 @@ export class SubtitlePanel {
       <div class="bennu-tab-content" data-content="settings">
         <div class="bennu-settings">
           <div class="bennu-settings-section">
-            <div class="bennu-settings-section-title">Feishu Wiki</div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div class="bennu-settings-section-title">Feishu Auth</div>
+            <div style="display:flex;align-items:center;gap:8px">
               <div class="bennu-feishu-auth-status" style="font-size:12px;color:#999;flex:1">
                 Checking...
               </div>
               <button class="bennu-btn bennu-feishu-logout-btn" style="font-size:11px;padding:2px 8px;display:none">Clear Auth</button>
+            </div>
+          </div>
+          <div class="bennu-settings-section">
+            <div class="bennu-settings-section-title">Feishu Wiki</div>
+            <div class="bennu-wiki-space-display" style="font-size:12px;color:#555;padding:6px 8px;background:#f0f7ff;border-radius:6px;border:1px solid #dde8f8;margin-bottom:8px">
+              Knowledge base: <span class="bennu-settings-wiki-space-name" style="font-weight:600;color:#3370ff">…</span>
+              <span class="bennu-wiki-refresh-btn" data-action="refresh-settings-wiki-space" title="Refresh" style="cursor:pointer;font-size:14px;color:#3370ff;margin-left:2px;vertical-align:middle">↻</span>
             </div>
             <div class="bennu-wiki-config">
               <div class="bennu-wiki-mode-tabs" style="display:flex;gap:4px;margin-bottom:8px">
@@ -428,7 +442,7 @@ export class SubtitlePanel {
           </div>
           <!-- Step 2b: new document panel -->
           <div class="bennu-feishu-new-panel" style="display:none">
-            <div class="bennu-feishu-new-info">Doc will be created in knowledge base: <span class="bennu-wiki-space-name">…</span></div>
+            <div class="bennu-feishu-new-info">Doc will be created in knowledge base: <span class="bennu-wiki-space-name">…</span> <span class="bennu-wiki-refresh-btn" data-action="refresh-wiki-space" title="Refresh">↻</span></div>
             <div class="bennu-feishu-wiki-hint" style="display:none">Please go to <span class="bennu-feishu-settings-link" data-action="settings">Settings</span> to configure your wiki root node.</div>
             <div class="bennu-feishu-option-buttons">
               <button class="bennu-btn bennu-feishu-confirm-btn" data-action="feishu-new">Confirm</button>
@@ -494,11 +508,20 @@ export class SubtitlePanel {
     };
     refreshAuthStatus();
 
+    // Load wiki space name display
+    this.resolveWikiSpaceName();
+
     // Logout button
     logoutBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       fetch('http://localhost:2185/feishu/auth/logout', { method: 'POST' })
-        .then(() => refreshAuthStatus())
+        .then(() => {
+          saveToLocal('feishuWikiRootNodeToken', '');
+          saveToLocal('feishuWikiSpaceName', '');
+          if (wikiRootInput) wikiRootInput.value = '';
+          this.resolveWikiSpaceName(true);
+          refreshAuthStatus();
+        })
         .catch((err) => { console.warn('BennuNote: Logout request failed:', err); refreshAuthStatus(); });
     });
 
@@ -523,8 +546,11 @@ export class SubtitlePanel {
       });
       wikiRootInput.addEventListener('change', () => {
         const raw = wikiRootInput.value.trim();
-        const token = parseFeishuToken(raw);
-        saveToLocal('feishuWikiRootNodeToken', token || raw);
+        const token = parseFeishuToken(raw) || raw;
+        saveToLocal('feishuWikiRootNodeToken', token);
+        // Clear stale space name and re-resolve
+        saveToLocal('feishuWikiSpaceName', '');
+        this.resolveWikiSpaceName(true);
       });
     }
 
@@ -658,17 +684,29 @@ export class SubtitlePanel {
         const el = this.contentSettings.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-setting="${setting}"]`);
         return el?.value.trim() || '';
       };
+      // Read wiki root token from input (may have changed without blur)
+      const wikiRaw = wikiRootInput?.value.trim() || '';
+      const wikiToken = wikiRaw ? (parseFeishuToken(wikiRaw) || wikiRaw) : '';
       chrome.storage.local.get('bennunote_config', (data) => {
+        const oldConfig = (data.bennunote_config || {}) as Record<string, unknown>;
+        const oldToken = (oldConfig.feishuWikiRootNodeToken as string) || '';
+        const tokenChanged = wikiToken !== oldToken;
         const config = {
-          ...(data.bennunote_config || {}),
+          ...oldConfig,
           bilibiliCookie: getValue('bilibiliCookie'),
           whisperModelSize: getValue('whisperModelSize'),
           maxTokens: parseInt(getValue('maxTokens'), 10) || 4096,
+          feishuWikiRootNodeToken: wikiToken,
+          // Clear space name if token changed so it gets re-resolved
+          ...(tokenChanged ? { feishuWikiSpaceName: '' } : {}),
         };
         chrome.storage.local.set({ bennunote_config: config }, () => {
           const toast = this.contentSettings.querySelector<HTMLElement>('.bennu-settings-toast')!;
           toast.style.display = '';
           setTimeout(() => (toast.style.display = 'none'), 1500);
+          if (tokenChanged) {
+            this.resolveWikiSpaceName(true);
+          }
         });
       });
     });
@@ -696,6 +734,7 @@ export class SubtitlePanel {
       else if (action === 'feishu-show-new') this.showFeishuNewPanel();
       else if (action === 'feishu-append') this.syncFeishuAppend();
       else if (action === 'feishu-new') this.syncFeishuNew();
+      else if (action === 'refresh-wiki-space' || action === 'refresh-settings-wiki-space') this.resolveWikiSpaceName(true);
       else if (action === 'feishu-cancel') this.hideFeishuOptions();
       else if (action === 'settings') this.switchTab('settings');
       else if (action === 'summarize') this.onSummarize?.();
@@ -1150,7 +1189,8 @@ export class SubtitlePanel {
     if (infoRows.length > 0) {
       lines.push('', '## 主要信息', '', '| | |', '|---|---|');
       for (const [label, value] of infoRows) {
-        lines.push(`| ${label} | ${value} |`);
+        const safeValue = value.replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ').replace(/ {2,}/g, ' ');
+        lines.push(`| ${label} | ${safeValue} |`);
       }
     }
 
@@ -1165,7 +1205,9 @@ export class SubtitlePanel {
         const time = h > 0
           ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
           : `${m}:${s.toString().padStart(2, '0')}`;
-        lines.push(`| ${time} | ${item.content} |`);
+        // Escape pipe characters and strip newlines to keep table rows intact
+        const safeContent = item.content.replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ').replace(/ {2,}/g, ' ');
+        lines.push(`| ${time} | ${safeContent} |`);
       }
     }
 
@@ -1252,6 +1294,88 @@ export class SubtitlePanel {
     docInput?.focus();
   }
 
+  /**
+   * Resolve wiki space name from root node token via server API.
+   * Updates storage and all UI elements that display the space name.
+   * If forceRefresh is true, ignores cached feishuWikiSpaceName and
+   * reads the token directly from the input to avoid async storage races.
+   */
+  private resolveWikiSpaceName(forceRefresh = false) {
+    // Collect all UI targets: new-panel dialog + settings display
+    const newEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-new-panel');
+    const dialogNameSpan = newEl?.querySelector<HTMLElement>('.bennu-wiki-space-name');
+    const confirmBtn = newEl?.querySelector<HTMLButtonElement>('[data-action="feishu-new"]');
+    const hintEl = newEl?.querySelector<HTMLElement>('.bennu-feishu-wiki-hint');
+    const settingsNameSpan = this.panelEl.querySelector<HTMLElement>('.bennu-settings-wiki-space-name');
+
+    const applyResult = (displayText: string, configured: boolean) => {
+      if (dialogNameSpan) dialogNameSpan.textContent = displayText;
+      if (settingsNameSpan) settingsNameSpan.textContent = displayText;
+      if (confirmBtn) confirmBtn.disabled = !configured;
+      if (hintEl) hintEl.style.display = configured ? 'none' : '';
+    };
+
+    // Read token directly from the input to avoid async storage race
+    const wikiRootInput = this.panelEl.querySelector<HTMLInputElement>('.bennu-wiki-root-node');
+    const inputRaw = wikiRootInput?.value.trim() || '';
+    const inputToken = inputRaw ? (parseFeishuToken(inputRaw) || inputRaw) : '';
+
+    if (forceRefresh) {
+      // Use the live input value — storage may not have caught up yet
+      if (!inputToken) {
+        applyResult('(not set)', false);
+        return;
+      }
+      applyResult('…', false);
+      fetch(`http://localhost:2185/feishu/wiki/node-info?token=${encodeURIComponent(inputToken)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(info => {
+          if (info?.space_name) {
+            saveToLocal('feishuWikiSpaceName', info.space_name);
+            applyResult(info.space_name, true);
+          } else {
+            applyResult(inputToken, true);
+          }
+        })
+        .catch(() => {
+          applyResult(inputToken, true);
+        });
+      return;
+    }
+
+    // Non-refresh: try cached space name from storage first
+    applyResult('…', false);
+    chrome.storage.local.get('bennunote_config', (data) => {
+      const config = (data.bennunote_config || {}) as Record<string, string>;
+      const spaceName = config.feishuWikiSpaceName || '';
+      const rootToken = config.feishuWikiRootNodeToken || '';
+
+      if (spaceName) {
+        applyResult(spaceName, true);
+        return;
+      }
+
+      if (!rootToken) {
+        applyResult('(not set)', false);
+        return;
+      }
+
+      fetch(`http://localhost:2185/feishu/wiki/node-info?token=${encodeURIComponent(rootToken)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(info => {
+          if (info?.space_name) {
+            saveToLocal('feishuWikiSpaceName', info.space_name);
+            applyResult(info.space_name, true);
+          } else {
+            applyResult(rootToken, true);
+          }
+        })
+        .catch(() => {
+          applyResult(rootToken, true);
+        });
+    });
+  }
+
   private showFeishuNewPanel() {
     const chooseEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-choose');
     const appendEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-append-panel');
@@ -1260,21 +1384,7 @@ export class SubtitlePanel {
     if (appendEl) appendEl.style.display = 'none';
     if (newEl) {
       newEl.style.display = '';
-      const nameSpan = newEl.querySelector<HTMLElement>('.bennu-wiki-space-name');
-      const confirmBtn = newEl.querySelector<HTMLButtonElement>('[data-action="feishu-new"]');
-      const hintEl = newEl.querySelector<HTMLElement>('.bennu-feishu-wiki-hint');
-      if (confirmBtn) confirmBtn.disabled = true;
-      if (hintEl) hintEl.style.display = 'none';
-      if (nameSpan) {
-        nameSpan.textContent = '…';
-        chrome.storage.local.get('bennunote_config', (data) => {
-          const config = (data.bennunote_config || {}) as Record<string, string>;
-          const spaceName = config.feishuWikiSpaceName || '';
-          nameSpan.textContent = spaceName || '(not set)';
-          if (confirmBtn) confirmBtn.disabled = !spaceName;
-          if (hintEl) hintEl.style.display = spaceName ? 'none' : '';
-        });
-      }
+      this.resolveWikiSpaceName();
     }
   }
 
@@ -1311,6 +1421,16 @@ export class SubtitlePanel {
       btn.textContent = syncing ? 'Syncing...' : 'Sync to Feishu';
       btn.disabled = syncing;
     }
+  }
+
+  showToast(message: string, level: 'success' | 'warn' | 'error' = 'error', duration = 4000) {
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastEl.textContent = message;
+    this.toastEl.className = `bennu-toast ${level} visible`;
+    this.toastTimer = setTimeout(() => {
+      this.toastEl.classList.remove('visible');
+      this.toastTimer = null;
+    }, duration);
   }
 
   destroy() {

@@ -45,6 +45,7 @@ export interface WriteFeishuResult {
   success: boolean;
   docUrl?: string;
   error?: string;
+  warning?: string;
 }
 
 // Content Script → Background: request AI summary
