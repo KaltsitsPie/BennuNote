@@ -1,6 +1,65 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="20" fill="#00a1d6"/>
-  <text x="64" y="78" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white">B</text>
-  <rect x="20" y="90" width="88" height="6" rx="3" fill="rgba(255,255,255,0.7)"/>
-  <rect x="30" y="100" width="68" height="4" rx="2" fill="rgba(255,255,255,0.4)"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1b2a"/>
+      <stop offset="100%" stop-color="#1b3a5c"/>
+    </linearGradient>
+    <linearGradient id="rock" x1="0.3" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#e8d5b7"/>
+      <stop offset="50%" stop-color="#c4a882"/>
+      <stop offset="100%" stop-color="#8b7355"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#00c8ff" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#00c8ff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#00a1d6" flood-opacity="0.5"/>
+    </filter>
+    <filter id="rockShadow">
+      <feDropShadow dx="1" dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" rx="22" fill="url(#bg)"/>
+
+  <!-- Subtle stars -->
+  <circle cx="15" cy="20" r="1" fill="white" opacity="0.4"/>
+  <circle cx="108" cy="15" r="1.2" fill="white" opacity="0.5"/>
+  <circle cx="95" cy="108" r="0.8" fill="white" opacity="0.3"/>
+  <circle cx="20" cy="95" r="1" fill="white" opacity="0.35"/>
+  <circle cx="55" cy="12" r="0.7" fill="white" opacity="0.3"/>
+  <circle cx="110" cy="65" r="0.9" fill="white" opacity="0.25"/>
+
+  <!-- Comet tail (subtitle lines) - flowing from asteroid -->
+  <line x1="22" y1="62" x2="58" y2="46" stroke="#00c8ff" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+  <line x1="28" y1="72" x2="56" y2="58" stroke="#00c8ff" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+  <line x1="35" y1="81" x2="58" y2="68" stroke="#00c8ff" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+  <line x1="42" y1="89" x2="60" y2="78" stroke="#00c8ff" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
+
+  <!-- Glow behind asteroid -->
+  <ellipse cx="72" cy="48" rx="22" ry="20" fill="#00a1d6" opacity="0.12"/>
+
+  <!-- Asteroid body (Bennu - diamond-ish shape like real Bennu) -->
+  <g filter="url(#rockShadow)">
+    <path d="M72 28 L90 45 L88 58 L78 68 L62 66 L54 52 L58 38 Z"
+          fill="url(#rock)" stroke="#8b7355" stroke-width="0.5"/>
+    <!-- Surface details / craters -->
+    <circle cx="73" cy="47" r="5" fill="#b09670" opacity="0.6"/>
+    <circle cx="66" cy="55" r="3" fill="#9a8060" opacity="0.5"/>
+    <circle cx="80" cy="40" r="3.5" fill="#b8a080" opacity="0.4"/>
+    <circle cx="76" cy="58" r="2" fill="#a08a68" opacity="0.5"/>
+    <!-- Highlight edge -->
+    <path d="M72 28 L58 38 L54 52" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+  </g>
+
+  <!-- Small debris particles -->
+  <circle cx="48" cy="38" r="1.5" fill="#c4a882" opacity="0.6"/>
+  <circle cx="44" cy="50" r="1" fill="#c4a882" opacity="0.4"/>
+  <circle cx="50" cy="58" r="1.2" fill="#c4a882" opacity="0.5"/>
+
+  <!-- "Note" text element at bottom -->
+  <text x="64" y="105" text-anchor="middle" font-family="'SF Pro Rounded', 'Helvetica Neue', Arial, sans-serif"
+        font-size="22" font-weight="700" letter-spacing="1" fill="#00c8ff" opacity="0.85">NOTE</text>
 </svg>
