@@ -210,6 +210,8 @@ export class SubtitlePanel {
           <button class="bennu-btn" data-action="summarize">Summarize</button>
           <button class="bennu-btn" data-action="copy-summary" style="display:none">Copy Summary</button>
           <button class="bennu-btn" data-action="regenerate" style="display:none">Regenerate</button>
+          <button class="bennu-btn" data-action="download" style="display:none">Download</button>
+          <button class="bennu-btn bennu-feishu-btn" data-action="sync-feishu" style="display:none">Sync to Feishu</button>
         </div>
       </div>
       <div class="bennu-tab-content" data-content="settings">
@@ -1007,12 +1009,16 @@ export class SubtitlePanel {
     this.summaryActionsEl.style.display = '';
     const summarizeBtn = this.summaryActionsEl.querySelector('[data-action="summarize"]') as HTMLElement;
     const copyBtn = this.summaryActionsEl.querySelector('[data-action="copy-summary"]') as HTMLElement;
+    const downloadBtn2 = this.summaryActionsEl.querySelector('[data-action="download"]') as HTMLElement;
+    const syncBtn2 = this.summaryActionsEl.querySelector('[data-action="sync-feishu"]') as HTMLElement;
     if (summarizeBtn) {
       summarizeBtn.style.display = '';
       (summarizeBtn as HTMLButtonElement).disabled = false;
       summarizeBtn.textContent = 'Summarize';
     }
     if (copyBtn) copyBtn.style.display = 'none';
+    if (downloadBtn2) downloadBtn2.style.display = 'none';
+    if (syncBtn2) syncBtn2.style.display = 'none';
   }
 
   setSummarizeHandler(handler: () => void) {
@@ -1100,13 +1106,17 @@ export class SubtitlePanel {
       .map((p) => `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
       .join('');
 
-    // Show copy + regenerate buttons, hide summarize button
+    // Show copy + regenerate + download + sync buttons, hide summarize button
     const summarizeBtn = this.summaryActionsEl.querySelector('[data-action="summarize"]') as HTMLElement;
     const copyBtn = this.summaryActionsEl.querySelector('[data-action="copy-summary"]') as HTMLElement;
     const regenBtn = this.summaryActionsEl.querySelector('[data-action="regenerate"]') as HTMLElement;
+    const downloadBtn = this.summaryActionsEl.querySelector('[data-action="download"]') as HTMLElement;
+    const syncBtn = this.summaryActionsEl.querySelector('[data-action="sync-feishu"]') as HTMLElement;
     if (summarizeBtn) summarizeBtn.style.display = 'none';
     if (copyBtn) copyBtn.style.display = '';
     if (regenBtn) regenBtn.style.display = '';
+    if (downloadBtn) downloadBtn.style.display = '';
+    if (syncBtn) syncBtn.style.display = '';
 
     // Auto-switch to summary tab
     this.switchTab('summary');

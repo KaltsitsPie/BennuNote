@@ -16,3 +16,6 @@ __pycache__/
 
 # Sensitive credentials
 cookies.txt
+
+.DS_Store
+docs/.DS_Store
