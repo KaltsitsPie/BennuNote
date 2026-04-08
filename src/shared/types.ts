@@ -48,6 +48,7 @@ export interface BennuNoteConfig {
   deepseekModel: string;
   maxTokens: number;
   feishuWikiRootNodeToken: string;
+  feishuWikiSpaceName: string;
 }
 
 export const DEFAULT_CONFIG: BennuNoteConfig = {
@@ -66,4 +67,5 @@ export const DEFAULT_CONFIG: BennuNoteConfig = {
   deepseekModel: '',
   maxTokens: 4096,
   feishuWikiRootNodeToken: '',
+  feishuWikiSpaceName: '',
 };

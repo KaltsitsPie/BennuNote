@@ -1,5 +1,6 @@
 import type { BennuNoteConfig } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/types';
+import { saveToLocal, parseFeishuToken } from '../shared/utils';
 
 const SERVER_URL = 'http://localhost:2185';
 
@@ -7,22 +8,8 @@ function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
 }
 
-function parseToken(input: string): string {
-  if (!input) return '';
-  const m = input.match(/(?:larkoffice\.com|feishu\.cn|larksuite\.com)\/(?:docx|wiki|docs)\/([A-Za-z0-9]+)/);
-  if (m) return m[1];
-  return input.includes('/') ? '' : input;
-}
-
 function snakeToCamel(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-}
-
-function saveToLocal(camelKey: string, value: string) {
-  chrome.storage.local.get('bennunote_config', (data) => {
-    const config = { ...(data.bennunote_config || {}), [camelKey]: value };
-    chrome.storage.local.set({ bennunote_config: config });
-  });
 }
 
 // --- Server Secrets ---
@@ -194,7 +181,7 @@ el<HTMLButtonElement>('save-btn').addEventListener('click', () => {
       ...existing,
       bilibiliCookie: el<HTMLTextAreaElement>('bilibili-cookie').value.trim(),
       whisperModelSize: el<HTMLSelectElement>('whisper-model').value,
-      feishuWikiRootNodeToken: parseToken(el<HTMLInputElement>('wiki-root-node').value.trim()),
+      feishuWikiRootNodeToken: (() => { const raw = el<HTMLInputElement>('wiki-root-node').value.trim(); return parseFeishuToken(raw) ?? (raw.includes('/') ? '' : raw); })(),
     };
     chrome.storage.local.set({ bennunote_config: config }, () => {
       const toast = document.getElementById('toast')!;

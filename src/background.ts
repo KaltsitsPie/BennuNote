@@ -1,25 +1,35 @@
 import type { Message } from './shared/messages';
 import type { BennuNoteConfig } from './shared/types';
-import { DEFAULT_CONFIG } from './shared/types';
 import { summarizeDirect } from './background/summarize-direct';
+import { getConfig } from './shared/utils';
 
 let activeTabId: number | null = null;
 
-async function getConfig(): Promise<BennuNoteConfig> {
-  const data = await chrome.storage.local.get('bennunote_config');
-  return { ...DEFAULT_CONFIG, ...(data.bennunote_config as Partial<BennuNoteConfig> | undefined) };
-}
-
 /** Get the active AI provider's key and model from config. */
 function getAIParams(config: BennuNoteConfig): { provider: string; apiKey: string; model: string } {
-  const provider = config.aiProvider || '';
   const map: Record<string, { key: string; model: string }> = {
     claude_setup_token: { key: config.claudeSetupToken, model: config.claudeModel },
-    claude_api: { key: config.claudeApiKey, model: config.claudeApiModel },
-    openai: { key: config.openaiApiKey, model: config.openaiModel },
-    gemini: { key: config.geminiApiKey, model: config.geminiModel },
-    deepseek: { key: config.deepseekApiKey, model: config.deepseekModel },
+    claude_api:         { key: config.claudeApiKey,     model: config.claudeApiModel },
+    openai:             { key: config.openaiApiKey,     model: config.openaiModel },
+    gemini:             { key: config.geminiApiKey,     model: config.geminiModel },
+    deepseek:           { key: config.deepseekApiKey,   model: config.deepseekModel },
   };
+
+  let provider = config.aiProvider;
+  if (!provider || !(provider in map)) {
+    const checks: Array<[string, string]> = [
+      ['claude_setup_token', config.claudeSetupToken],
+      ['claude_api',         config.claudeApiKey],
+      ['openai',             config.openaiApiKey],
+      ['gemini',             config.geminiApiKey],
+      ['deepseek',           config.deepseekApiKey],
+    ];
+    for (const [p, k] of checks) {
+      if (k) { provider = p; break; }
+    }
+  }
+
+  provider = provider || '';
   const entry = map[provider];
   return { provider, apiKey: entry?.key || '', model: entry?.model || '' };
 }
@@ -30,7 +40,9 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
       const tabId = tabs[0]?.id;
       if (tabId) {
         activeTabId = tabId;
-        chrome.tabs.sendMessage(tabId, msg, () => { void chrome.runtime.lastError; });
+        chrome.tabs.sendMessage(tabId, msg, () => {
+          if (chrome.runtime.lastError) console.warn('BennuNote: sendMessage failed:', chrome.runtime.lastError.message);
+        });
       }
     });
     sendResponse({ ok: true });
@@ -51,6 +63,7 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
             model_size: config.whisperModelSize || 'tiny',
             cookie: config.bilibiliCookie || '',
             language: msg.language,
+            req_id: msg.reqId || '',
           }),
         });
         const data = await resp.json();
@@ -58,12 +71,12 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
           if (tabId) chrome.tabs.sendMessage(tabId, {
             type: 'TRANSCRIPT_RESULT',
             result: { source: data.source, items: data.items, language: msg.language },
-          }, () => { void chrome.runtime.lastError; });
+          }, () => { if (chrome.runtime.lastError) console.warn('BennuNote: sendMessage failed:', chrome.runtime.lastError.message); });
         } else {
           if (tabId) chrome.tabs.sendMessage(tabId, {
             type: 'TRANSCRIPT_RESULT', result: null,
             error: typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || 'Unknown error'),
-          }, () => { void chrome.runtime.lastError; });
+          }, () => { if (chrome.runtime.lastError) console.warn('BennuNote: sendMessage failed:', chrome.runtime.lastError.message); });
         }
       } catch (err) {
         if (tabId) chrome.tabs.sendMessage(tabId, {

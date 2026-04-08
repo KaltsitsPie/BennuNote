@@ -2,13 +2,14 @@ import { extractVideoInfo, fetchSubtitles, loadTrack, setLogFn } from './bilibil
 import { extractYouTubeSubtitles, setYtLogFn } from './youtube-api';
 import { SubtitlePanel } from './subtitle-panel';
 import type { Message } from '../shared/messages';
-import type { BennuNoteConfig, SubtitleItem, VideoInfo } from '../shared/types';
-import { DEFAULT_CONFIG } from '../shared/types';
+import type { SubtitleItem, VideoInfo } from '../shared/types';
+import { getConfig } from '../shared/utils';
 
 let panel: SubtitlePanel | null = null;
 let currentVideoInfo: VideoInfo | null = null;
 let currentItems: SubtitleItem[] = [];
 let backendOnline = false;
+let currentReqId = '';
 
 function getPanel(): SubtitlePanel {
   if (!panel) {
@@ -91,6 +92,43 @@ function getPanel(): SubtitlePanel {
   return panel;
 }
 
+async function fetchTranscript(
+  p: ReturnType<typeof getPanel>,
+  reqId: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const startTime = Date.now();
+  const waitTimer = setInterval(() => {
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    p.log(`[${reqId}] Still waiting for backend... (${elapsed}s elapsed)`, 'info');
+  }, 10000);
+  (window as unknown as Record<string, unknown>).__bennuWaitTimer = waitTimer;
+
+  try {
+    const resp = await fetch('http://localhost:2185/transcript', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    clearInterval(waitTimer);
+    (window as unknown as Record<string, unknown>).__bennuWaitTimer = null;
+    const data = await resp.json();
+    if (resp.ok && data.items && data.items.length > 0) {
+      p.log(`[${reqId}] Backend transcription complete: ${data.items.length} segments (source: ${data.source})`, 'success');
+      currentItems = data.items;
+      p.setSubtitles(data.items, data.source);
+    } else {
+      const err = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || 'Unknown error');
+      p.log(`[${reqId}] Backend transcription failed: ${err}`, 'error');
+      p.log('Check the Python backend terminal for detailed error logs.', 'warn');
+    }
+  } catch (err) {
+    clearInterval(waitTimer);
+    (window as unknown as Record<string, unknown>).__bennuWaitTimer = null;
+    p.log(`[${reqId}] Backend request failed: ${err}`, 'error');
+  }
+}
+
 // Listen for messages from background/popup
 chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
   try {
@@ -98,26 +136,9 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
       handleExtract(msg.language || 'zh');
       sendResponse({ ok: true });
     }
-    if (msg.type === 'TRANSCRIPT_RESULT') {
-      // Clear waiting timer
-      const timer = (window as unknown as Record<string, unknown>).__bennuWaitTimer;
-      if (timer) {
-        clearInterval(timer as ReturnType<typeof setInterval>);
-        (window as unknown as Record<string, unknown>).__bennuWaitTimer = null;
-      }
-
-      const p = getPanel();
-      if (msg.result && msg.result.items.length > 0) {
-        p.log(`Backend transcription complete: ${msg.result.items.length} segments (source: ${msg.result.source})`, 'success');
-        currentItems = msg.result.items;
-        p.setSubtitles(msg.result.items, msg.result.source);
-      } else {
-        p.log(`Backend transcription failed: ${msg.error || 'no result'}`, 'error');
-        p.log('Check the Python backend terminal for detailed error logs.', 'warn');
-      }
-    }
   } catch (err) {
     getPanel().log(`Message handler error: ${err}`, 'error');
+    sendResponse({ ok: false, error: String(err) });
   }
   return false;
 });
@@ -166,40 +187,33 @@ async function handleExtractYouTube(language: string) {
 
   if (!result || result.items.length === 0) {
     if (debug.trackCount === 0) {
-      p.log('No subtitle tracks found. Falling back to backend Whisper transcription...', 'warn');
-
-      const online = await checkBackendHealth(p);
-      if (!online) {
-        p.log('Backend service is offline — cannot fallback to transcription.', 'error');
-        p.log('Start the backend: ./start-server.sh', 'warn');
-        return;
-      }
-
-      const videoUrl = `https://www.youtube.com/watch?v=${videoInfo.youtubeVideoId}`;
-      p.log(`Step 2: Requesting backend Whisper transcription...`, 'step');
-      p.log('Backend will use: yt-dlp → Whisper (this may take a while)', 'info');
-
-      let waitSeconds = 0;
-      const waitTimer = setInterval(() => {
-        waitSeconds += 10;
-        p.log(`Still waiting for backend... (${waitSeconds}s elapsed)`, 'info');
-      }, 10000);
-      (window as unknown as Record<string, unknown>).__bennuWaitTimer = waitTimer;
-
-      chrome.runtime.sendMessage(
-        { type: 'TRANSCRIPT_REQUEST', bvid: '', language, videoUrl },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            clearInterval(waitTimer);
-            p.log(`Failed to send transcript request: ${chrome.runtime.lastError.message}`, 'error');
-          } else {
-            p.log('Transcript request sent. Waiting for backend response...', 'info');
-          }
-        },
-      );
+      p.log('No subtitle tracks found on page.', 'warn');
     } else {
-      p.log(`No "${language}" subtitles found. Available: ${debug.allTracks}`, 'warn');
+      p.log(`No "${language}" subtitles found on page (available: ${debug.allTracks}).`, 'warn');
     }
+    p.log('Falling back to backend transcription (InnerTube API → Whisper)...', 'warn');
+
+    const online = await checkBackendHealth(p);
+    if (!online) {
+      p.log('Backend service is offline — cannot fallback to transcription.', 'error');
+      p.log('Start the backend: ./start-server.sh', 'warn');
+      return;
+    }
+
+    const videoUrl = `https://www.youtube.com/watch?v=${videoInfo.youtubeVideoId}`;
+    const reqId = Math.random().toString(36).slice(2, 8);
+    currentReqId = reqId;
+    p.log(`[${reqId}] Requesting backend transcription...`, 'step');
+
+    const config = await getConfig();
+    await fetchTranscript(p, reqId, {
+      bvid: '',
+      video_url: videoUrl,
+      model_size: config.whisperModelSize || 'tiny',
+      cookie: config.bilibiliCookie || '',
+      language,
+      req_id: reqId,
+    });
     return;
   }
 
@@ -319,34 +333,19 @@ async function handleExtract(language: string) {
     }
     p.log('Backend service: online', 'success');
 
-    p.log(`Step 3: Requesting backend transcription for ${videoInfo.bvid}...`, 'step');
+    const reqId = Math.random().toString(36).slice(2, 8);
+    currentReqId = reqId;
+    p.log(`[${reqId}] Step 3: Requesting backend transcription for ${videoInfo.bvid}...`, 'step');
     p.log('Backend will try: Bcut ASR → Whisper (this may take a while)', 'info');
 
-    // Start a waiting indicator so the user knows we're still working
-    let waitSeconds = 0;
-    const waitTimer = setInterval(() => {
-      waitSeconds += 10;
-      p.log(`Still waiting for backend... (${waitSeconds}s elapsed)`, 'info');
-    }, 10000);
-
-    // Store timer so TRANSCRIPT_RESULT handler can clear it
-    (window as unknown as Record<string, unknown>).__bennuWaitTimer = waitTimer;
-
-    chrome.runtime.sendMessage(
-      {
-        type: 'TRANSCRIPT_REQUEST',
-        bvid: videoInfo.bvid,
-        language,
-      },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          clearInterval(waitTimer);
-          p.log(`Failed to send transcript request: ${chrome.runtime.lastError.message}`, 'error');
-        } else {
-          p.log('Transcript request sent to background. Waiting for backend response...', 'info');
-          p.log('(Backend: downloading audio → Bcut ASR → Whisper fallback)', 'info');
-        }
-      }
-    );
+    const config = await getConfig();
+    await fetchTranscript(p, reqId, {
+      bvid: videoInfo.bvid,
+      video_url: '',
+      model_size: config.whisperModelSize || 'tiny',
+      cookie: config.bilibiliCookie || '',
+      language,
+      req_id: reqId,
+    });
   }
 }

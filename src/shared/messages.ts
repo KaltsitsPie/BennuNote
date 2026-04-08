@@ -6,19 +6,13 @@ export interface ExtractRequest {
   language: string;
 }
 
-// Content Script → Background
-export interface SubtitleApiResult {
-  type: 'SUBTITLE_API_RESULT';
-  result: SubtitleResult | null;
-  videoInfo: { bvid: string; cid: number; title: string };
-}
-
 // Content Script → Background: request backend transcription
 export interface TranscriptRequest {
   type: 'TRANSCRIPT_REQUEST';
   bvid: string;
   language: string;
   videoUrl?: string;  // explicit URL for non-Bilibili sources (e.g. YouTube)
+  reqId?: string;     // short correlation ID for log tracing
 }
 
 // Background → Content Script: backend transcription result
@@ -71,7 +65,6 @@ export interface SummarizeResult {
 
 export type Message =
   | ExtractRequest
-  | SubtitleApiResult
   | TranscriptRequest
   | TranscriptResult
   | WriteFeishuRequest

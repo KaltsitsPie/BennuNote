@@ -47,6 +47,7 @@ def transcribe_via_bcut(audio_path: str) -> list[dict]:
             "resource_file_type": ext,
             "model_id": MODEL_ID,
         },
+        timeout=30,
     )
     resp.raise_for_status()
     create_data = resp.json()
@@ -69,9 +70,11 @@ def transcribe_via_bcut(audio_path: str) -> list[dict]:
         start = i * per_size
         end = min(start + per_size, file_size)
         chunk = audio_data[start:end]
-        put_resp = requests.put(upload_urls[i], headers=HEADERS, data=chunk)
+        put_resp = requests.put(upload_urls[i], headers=HEADERS, data=chunk, timeout=60)
         put_resp.raise_for_status()
         etag = put_resp.headers.get("Etag", put_resp.headers.get("ETag", ""))
+        if not etag:
+            logger.warning("  Chunk %d/%d: empty etag in response headers", i + 1, num_chunks)
         etags.append(etag)
         logger.info("  Chunk %d/%d uploaded (%d bytes), etag=%s", i + 1, num_chunks, len(chunk), etag[:20])
 
@@ -87,6 +90,7 @@ def transcribe_via_bcut(audio_path: str) -> list[dict]:
             "upload_id": upload_id,
             "model_id": MODEL_ID,
         },
+        timeout=30,
     )
     resp.raise_for_status()
     complete_data = resp.json()
@@ -105,6 +109,7 @@ def transcribe_via_bcut(audio_path: str) -> list[dict]:
             "resource": download_url,
             "model_id": MODEL_ID,
         },
+        timeout=30,
     )
     resp.raise_for_status()
     task_data = resp.json()

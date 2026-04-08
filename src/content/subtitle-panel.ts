@@ -1,4 +1,5 @@
 import type { SubtitleItem, SubtitleSource, SubtitleTrack, VideoInfo } from '../shared/types';
+import { saveToLocal, parseFeishuToken } from '../shared/utils';
 import cssText from './subtitle-panel.css?inline';
 
 type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'step';
@@ -77,6 +78,8 @@ export class SubtitlePanel {
   private onSyncFeishu: (() => void) | null = null;
   private onSummarize: (() => void) | null = null;
   private videoInfo: VideoInfo | null = null;
+  private feishuOptionsEl: HTMLElement | null = null;
+  private footerButtonsEl: HTMLElement | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -93,7 +96,55 @@ export class SubtitlePanel {
 
     const panel = document.createElement('div');
     panel.className = 'bennu-panel hidden';
-    panel.innerHTML = `
+    panel.innerHTML = this.buildPanelHTML();
+
+    this.shadow.appendChild(panel);
+    this.panelEl = panel;
+
+    this.logEl = panel.querySelector('.bennu-log')!;
+    this.listEl = panel.querySelector('.bennu-subtitle-list')!;
+    this.sourceBadge = panel.querySelector('.bennu-source-badge')!;
+    this.footerEl = panel.querySelector('.bennu-footer')!;
+    this.emptyEl = panel.querySelector('.bennu-empty')!;
+
+    this.tabLog = panel.querySelector('[data-tab="log"]')!;
+    this.tabSubtitle = panel.querySelector('[data-tab="subtitle"]')!;
+    this.tabSummary = panel.querySelector('[data-tab="summary"]')!;
+    this.tabSettings = panel.querySelector('[data-tab="settings"]')!;
+    this.contentLog = panel.querySelector('[data-content="log"]')!;
+    this.contentSubtitle = panel.querySelector('[data-content="subtitle"]')!;
+    this.contentSummary = panel.querySelector('[data-content="summary"]')!;
+    this.contentSettings = panel.querySelector('[data-content="settings"]')!;
+    this.summaryEmptyEl = panel.querySelector('.bennu-summary-empty')!;
+    this.summarySetupEl = panel.querySelector('.bennu-summary-setup')!;
+    this.summaryLoadingEl = panel.querySelector('.bennu-summary-loading')!;
+    this.summaryTextEl = panel.querySelector('.bennu-summary-text')!;
+    this.summaryActionsEl = panel.querySelector('.bennu-summary-actions')!;
+    this.langSelect = panel.querySelector('.bennu-lang-select')!;
+    this.langBar = panel.querySelector('.bennu-lang-bar')!;
+    this.feishuLink = panel.querySelector('.bennu-feishu-link')!;
+    this.feishuUrl = panel.querySelector('.bennu-feishu-url')!;
+    this.feishuOptionsEl = this.footerEl.querySelector<HTMLElement>('.bennu-feishu-options');
+    this.footerButtonsEl = this.footerEl.querySelector<HTMLElement>('.bennu-footer-buttons');
+
+    // Language change handler
+    this.langSelect.addEventListener('change', () => {
+      const idx = this.langSelect.selectedIndex;
+      const tracks = (this.langSelect as unknown as { _tracks?: SubtitleTrack[] })._tracks;
+      if (tracks && tracks[idx] && this.onTrackChange) {
+        this.onTrackChange(tracks[idx]);
+      }
+    });
+
+    // Default: show log tab
+    this.switchTab('log');
+
+    this.initSettingsTab();
+    this.initEventDelegation();
+  }
+
+  private buildPanelHTML(): string {
+    return `
       <div class="bennu-header">
         <div style="display:flex;align-items:center">
           <span class="bennu-title">BennuNote</span>
@@ -353,90 +404,72 @@ export class SubtitlePanel {
         </div>
       </div>
       <div class="bennu-footer" style="display:none">
-        <div class="bennu-wiki-doc-input">
-          <input type="text" class="bennu-settings-input bennu-wiki-doc-link" placeholder="飞书文档链接（留空则新建）" spellcheck="false">
-        </div>
         <div class="bennu-footer-buttons">
           <button class="bennu-btn" data-action="copy">Copy Text</button>
           <button class="bennu-btn" data-action="download">Download</button>
           <button class="bennu-btn bennu-feishu-btn" data-action="sync-feishu">Sync to Feishu</button>
+        </div>
+        <div class="bennu-feishu-options" style="display:none">
+          <!-- Step 1: choose mode -->
+          <div class="bennu-feishu-choose">
+            <div class="bennu-feishu-option-buttons">
+              <button class="bennu-btn" data-action="feishu-show-append">Append to existing doc</button>
+              <button class="bennu-btn" data-action="feishu-show-new">New document</button>
+              <button class="bennu-btn bennu-feishu-cancel-btn" data-action="feishu-cancel">Cancel</button>
+            </div>
+          </div>
+          <!-- Step 2a: append panel -->
+          <div class="bennu-feishu-append-panel" style="display:none">
+            <input type="text" class="bennu-settings-input bennu-wiki-doc-link" placeholder="Feishu document link" spellcheck="false">
+            <div class="bennu-feishu-option-buttons">
+              <button class="bennu-btn bennu-feishu-confirm-btn" data-action="feishu-append">Confirm</button>
+              <button class="bennu-btn bennu-feishu-cancel-btn" data-action="feishu-cancel">Cancel</button>
+            </div>
+          </div>
+          <!-- Step 2b: new document panel -->
+          <div class="bennu-feishu-new-panel" style="display:none">
+            <div class="bennu-feishu-new-info">Doc will be created in knowledge base: <span class="bennu-wiki-space-name">…</span></div>
+            <div class="bennu-feishu-wiki-hint" style="display:none">Please go to <span class="bennu-feishu-settings-link" data-action="settings">Settings</span> to configure your wiki root node.</div>
+            <div class="bennu-feishu-option-buttons">
+              <button class="bennu-btn bennu-feishu-confirm-btn" data-action="feishu-new">Confirm</button>
+              <button class="bennu-btn bennu-feishu-cancel-btn" data-action="feishu-cancel">Cancel</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="bennu-feishu-link" style="display:none">
         <a class="bennu-feishu-url" href="#" target="_blank">Open in Feishu</a>
       </div>
     `;
+  }
 
-    this.shadow.appendChild(panel);
-    this.panelEl = panel;
-
-    this.logEl = panel.querySelector('.bennu-log')!;
-    this.listEl = panel.querySelector('.bennu-subtitle-list')!;
-    this.sourceBadge = panel.querySelector('.bennu-source-badge')!;
-    this.footerEl = panel.querySelector('.bennu-footer')!;
-    this.emptyEl = panel.querySelector('.bennu-empty')!;
-
-    this.tabLog = panel.querySelector('[data-tab="log"]')!;
-    this.tabSubtitle = panel.querySelector('[data-tab="subtitle"]')!;
-    this.tabSummary = panel.querySelector('[data-tab="summary"]')!;
-    this.tabSettings = panel.querySelector('[data-tab="settings"]')!;
-    this.contentLog = panel.querySelector('[data-content="log"]')!;
-    this.contentSubtitle = panel.querySelector('[data-content="subtitle"]')!;
-    this.contentSummary = panel.querySelector('[data-content="summary"]')!;
-    this.contentSettings = panel.querySelector('[data-content="settings"]')!;
-    this.summaryEmptyEl = panel.querySelector('.bennu-summary-empty')!;
-    this.summarySetupEl = panel.querySelector('.bennu-summary-setup')!;
-    this.summaryLoadingEl = panel.querySelector('.bennu-summary-loading')!;
-    this.summaryTextEl = panel.querySelector('.bennu-summary-text')!;
-    this.summaryActionsEl = panel.querySelector('.bennu-summary-actions')!;
-    this.langSelect = panel.querySelector('.bennu-lang-select')!;
-    this.langBar = panel.querySelector('.bennu-lang-bar')!;
-    this.feishuLink = panel.querySelector('.bennu-feishu-link')!;
-    this.feishuUrl = panel.querySelector('.bennu-feishu-url')!;
-
-    // Language change handler
-    this.langSelect.addEventListener('change', () => {
-      const idx = this.langSelect.selectedIndex;
-      const tracks = (this.langSelect as unknown as { _tracks?: SubtitleTrack[] })._tracks;
-      if (tracks && tracks[idx] && this.onTrackChange) {
-        this.onTrackChange(tracks[idx]);
-      }
-    });
-
-    // Default: show log tab
-    this.switchTab('log');
-
+  private initSettingsTab(): void {
     // Settings tab: provider tab switching
     this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-tab').forEach((tab) => {
       tab.addEventListener('click', (e) => {
         e.stopPropagation();
         const p = tab.dataset.provider!;
-        this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-tab').forEach(
-          (t) => t.classList.toggle('active', t.dataset.provider === p)
-        );
-        this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-panel').forEach(
-          (panel) => panel.classList.toggle('active', panel.dataset.panel === p)
-        );
-        this.saveToLocal('aiProvider', p);
+        this.activateProvider(p);
+        saveToLocal('aiProvider', p);
       });
     });
 
     // Settings tab: wire up model selects
     this.contentSettings.querySelectorAll<HTMLSelectElement>('.bennu-model-select').forEach((sel) => {
       sel.addEventListener('change', () => {
-        this.saveToLocal(sel.dataset.modelKey!, sel.value);
+        saveToLocal(sel.dataset.modelKey!, sel.value);
       });
     });
 
     // --- Feishu Wiki settings wiring ---
-    const authStatusEl = panel.querySelector('.bennu-feishu-auth-status') as HTMLElement;
-    const logoutBtn = panel.querySelector('.bennu-feishu-logout-btn') as HTMLButtonElement;
-    const wikiRootInput = panel.querySelector<HTMLInputElement>('.bennu-wiki-root-node');
-    const wikiExistingDiv = panel.querySelector('.bennu-wiki-existing') as HTMLElement;
-    const wikiCreateDiv = panel.querySelector('.bennu-wiki-create') as HTMLElement;
-    const wikiCreateNameInput = panel.querySelector<HTMLInputElement>('.bennu-wiki-create-name');
-    const wikiCreateBtn = panel.querySelector('.bennu-wiki-create-btn') as HTMLButtonElement;
-    const wikiCreateStatus = panel.querySelector('.bennu-wiki-create-status') as HTMLElement;
+    const authStatusEl = this.panelEl.querySelector('.bennu-feishu-auth-status') as HTMLElement;
+    const logoutBtn = this.panelEl.querySelector('.bennu-feishu-logout-btn') as HTMLButtonElement;
+    const wikiRootInput = this.panelEl.querySelector<HTMLInputElement>('.bennu-wiki-root-node');
+    const wikiExistingDiv = this.panelEl.querySelector('.bennu-wiki-existing') as HTMLElement;
+    const wikiCreateDiv = this.panelEl.querySelector('.bennu-wiki-create') as HTMLElement;
+    const wikiCreateNameInput = this.panelEl.querySelector<HTMLInputElement>('.bennu-wiki-create-name');
+    const wikiCreateBtn = this.panelEl.querySelector('.bennu-wiki-create-btn') as HTMLButtonElement;
+    const wikiCreateStatus = this.panelEl.querySelector('.bennu-wiki-create-status') as HTMLElement;
 
     // Auth status check
     const refreshAuthStatus = () => {
@@ -466,15 +499,15 @@ export class SubtitlePanel {
       e.stopPropagation();
       fetch('http://localhost:2185/feishu/auth/logout', { method: 'POST' })
         .then(() => refreshAuthStatus())
-        .catch(() => refreshAuthStatus());
+        .catch((err) => { console.warn('BennuNote: Logout request failed:', err); refreshAuthStatus(); });
     });
 
     // Wiki mode tabs (existing vs create)
-    panel.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach((btn) => {
+    this.panelEl.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const mode = btn.dataset.wikiMode;
-        panel.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach(
+        this.panelEl.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach(
           (b) => b.classList.toggle('active', b.dataset.wikiMode === mode)
         );
         wikiExistingDiv.style.display = mode === 'existing' ? '' : 'none';
@@ -490,8 +523,8 @@ export class SubtitlePanel {
       });
       wikiRootInput.addEventListener('change', () => {
         const raw = wikiRootInput.value.trim();
-        const token = this.parseDocToken(raw);
-        this.saveToLocal('feishuWikiRootNodeToken', token || raw);
+        const token = parseFeishuToken(raw);
+        saveToLocal('feishuWikiRootNodeToken', token || raw);
       });
     }
 
@@ -557,12 +590,13 @@ export class SubtitlePanel {
           });
           const docData = await docResp.json();
           const docUrl = docData?.data?.doc_url || docData?.doc_url || '';
-          const nodeToken = this.parseDocToken(docUrl);
+          const nodeToken = parseFeishuToken(docUrl);
 
           if (nodeToken) {
-            this.saveToLocal('feishuWikiRootNodeToken', nodeToken);
+            saveToLocal('feishuWikiRootNodeToken', nodeToken);
             if (wikiRootInput) wikiRootInput.value = nodeToken;
           }
+          saveToLocal('feishuWikiSpaceName', name);
 
           wikiCreateStatus.style.color = '#4caf50';
           wikiCreateStatus.innerHTML = docUrl
@@ -572,7 +606,7 @@ export class SubtitlePanel {
           if (docUrl) window.open(docUrl, '_blank');
 
           // Switch to existing mode to show the token
-          panel.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach(
+          this.panelEl.querySelectorAll<HTMLElement>('.bennu-wiki-mode-btn').forEach(
             (b) => b.classList.toggle('active', b.dataset.wikiMode === 'existing')
           );
           wikiExistingDiv.style.display = '';
@@ -601,7 +635,7 @@ export class SubtitlePanel {
         e.stopPropagation();
         const val = input.value.trim();
         if (!val) return;
-        this.saveToLocal(key, val);
+        saveToLocal(key, val);
         editDiv.style.display = 'none';
         this.refreshSecretStatus();
       });
@@ -611,7 +645,7 @@ export class SubtitlePanel {
       });
       btnClear.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.saveToLocal(key, '');
+        saveToLocal(key, '');
         this.refreshSecretStatus();
       });
     });
@@ -638,9 +672,11 @@ export class SubtitlePanel {
         });
       });
     });
+  }
 
+  private initEventDelegation(): void {
     // Event delegation
-    panel.addEventListener('click', (e) => {
+    this.panelEl.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
 
       // Tab switching
@@ -655,7 +691,12 @@ export class SubtitlePanel {
       else if (action === 'save-log') this.saveLog();
       else if (action === 'copy') this.copyText();
       else if (action === 'download') this.downloadMarkdown();
-      else if (action === 'sync-feishu') this.onSyncFeishu?.();
+      else if (action === 'sync-feishu') this.showFeishuOptions();
+      else if (action === 'feishu-show-append') this.showFeishuAppendPanel();
+      else if (action === 'feishu-show-new') this.showFeishuNewPanel();
+      else if (action === 'feishu-append') this.syncFeishuAppend();
+      else if (action === 'feishu-new') this.syncFeishuNew();
+      else if (action === 'feishu-cancel') this.hideFeishuOptions();
       else if (action === 'settings') this.switchTab('settings');
       else if (action === 'summarize') this.onSummarize?.();
       else if (action === 'copy-summary') this.copySummary();
@@ -669,10 +710,8 @@ export class SubtitlePanel {
         if (box) {
           navigator.clipboard.writeText(box.textContent || '').then(() => {
             const btn = target.closest('.bennu-scope-copy') as HTMLElement;
-            const orig = btn.textContent;
-            btn.textContent = 'Copied!';
-            setTimeout(() => { btn.textContent = orig; }, 1500);
-          });
+            this.flashButton(btn);
+          }).catch((err) => console.warn('BennuNote: Clipboard copy failed:', err));
         }
         return;
       }
@@ -680,6 +719,14 @@ export class SubtitlePanel {
       const item = target.closest('.bennu-subtitle-item') as HTMLElement | null;
       if (item?.dataset.time) {
         this.seekTo(parseFloat(item.dataset.time));
+      }
+    });
+
+    this.panelEl.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.matches('.bennu-wiki-doc-link')) {
+        const confirmBtn = this.feishuOptionsEl?.querySelector<HTMLButtonElement>('[data-action="feishu-append"]');
+        if (confirmBtn) confirmBtn.disabled = !target.value.trim();
       }
     });
   }
@@ -699,11 +746,19 @@ export class SubtitlePanel {
     if (tab === 'settings') this.loadSettings();
   }
 
-  private saveToLocal(key: string, value: string) {
-    chrome.storage.local.get('bennunote_config', (data) => {
-      const config = { ...(data.bennunote_config || {}), [key]: value };
-      chrome.storage.local.set({ bennunote_config: config });
-    });
+  private activateProvider(provider: string): void {
+    this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-tab')
+      .forEach(t => t.classList.toggle('active', t.dataset.provider === provider));
+    this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-panel')
+      .forEach(p => p.classList.toggle('active', p.dataset.panel === provider));
+  }
+
+  private setSummaryState(state: 'empty' | 'setup' | 'loading' | 'text'): void {
+    this.summaryEmptyEl.style.display   = state === 'empty'   ? '' : 'none';
+    this.summarySetupEl.style.display   = state === 'setup'   ? '' : 'none';
+    this.summaryLoadingEl.style.display = state === 'loading' ? '' : 'none';
+    this.summaryTextEl.style.display    = state === 'text'    ? '' : 'none';
+    this.summaryActionsEl.style.display = state === 'text'    ? '' : 'none';
   }
 
   private loadSettings() {
@@ -727,14 +782,7 @@ export class SubtitlePanel {
 
       // Restore active provider tab
       const provider = config.aiProvider;
-      if (provider) {
-        this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-tab').forEach(
-          (t) => t.classList.toggle('active', t.dataset.provider === provider)
-        );
-        this.contentSettings.querySelectorAll<HTMLElement>('.bennu-provider-panel').forEach(
-          (p) => p.classList.toggle('active', p.dataset.panel === provider)
-        );
-      }
+      if (provider) this.activateProvider(provider);
 
       // Update secret status dots
       this.refreshSecretStatusFromConfig(config);
@@ -766,7 +814,7 @@ export class SubtitlePanel {
   /** Get the target doc token from the wiki doc link input in the footer. */
   getWikiDocLink(): string {
     const input = this.footerEl.querySelector<HTMLInputElement>('.bennu-wiki-doc-link');
-    return this.parseDocToken(input?.value.trim() || '');
+    return parseFeishuToken(input?.value.trim() || '') ?? '';
   }
 
   show() {
@@ -817,11 +865,12 @@ export class SubtitlePanel {
       if (key !== this.logHourKey) {
         // Hour rolled over — start fresh for new key
         this.logHourKey = key;
+        this.logLines = [];
       }
       try {
         chrome.storage?.local?.set({ [key]: this.logLines.join('\n') });
         this.cleanOldLogs();
-      } catch { /* storage not available */ }
+      } catch (err) { console.warn('BennuNote: Log persist failed:', err); }
     }, 1000);
   }
 
@@ -912,9 +961,7 @@ export class SubtitlePanel {
   }
 
   private showSummarizeButton() {
-    this.summaryEmptyEl.style.display = 'none';
-    this.summaryLoadingEl.style.display = 'none';
-    this.summaryTextEl.style.display = 'none';
+    this.setSummaryState('empty');
     this.summaryTextEl.innerHTML = '';
     this.summaryActionsEl.style.display = '';
     const summarizeBtn = this.summaryActionsEl.querySelector('[data-action="summarize"]') as HTMLElement;
@@ -933,11 +980,7 @@ export class SubtitlePanel {
 
   /** Show inline token setup form when no token is configured. */
   showSetupForm() {
-    this.summaryEmptyEl.style.display = 'none';
-    this.summaryLoadingEl.style.display = 'none';
-    this.summaryTextEl.style.display = 'none';
-    this.summaryActionsEl.style.display = 'none';
-    this.summarySetupEl.style.display = '';
+    this.setSummaryState('setup');
     const input = this.summarySetupEl.querySelector('.bennu-setup-input') as HTMLInputElement;
     if (input) {
       input.value = '';
@@ -953,7 +996,7 @@ export class SubtitlePanel {
     if (this.items.length > 0) {
       this.showSummarizeButton();
     } else {
-      this.summaryEmptyEl.style.display = '';
+      this.setSummaryState('empty');
     }
   }
 
@@ -976,13 +1019,13 @@ export class SubtitlePanel {
     }
 
     // Save token to server config + local storage
-    this.saveToLocal('claudeSetupToken', token);
-    this.saveToLocal('aiProvider', 'claude_setup_token');
+    saveToLocal('claudeSetupToken', token);
+    saveToLocal('aiProvider', 'claude_setup_token');
     fetch('http://localhost:2185/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ claude_setup_token: token, ai_provider: 'claude_setup_token' }),
-    }).catch(() => {});
+    }).catch((err) => console.warn('BennuNote: Failed to save token to server config:', err));
     this.log('Claude Setup Token saved', 'success');
     this.hideSetupForm();
     this.showSummarizeButton();
@@ -1009,9 +1052,7 @@ export class SubtitlePanel {
   }
 
   setSummary(text: string) {
-    this.summaryLoadingEl.style.display = 'none';
-    this.summaryEmptyEl.style.display = 'none';
-    this.summaryTextEl.style.display = '';
+    this.setSummaryState('text');
     this.summaryTextEl.innerHTML = text
       .split('\n\n')
       .map((p) => `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
@@ -1024,7 +1065,6 @@ export class SubtitlePanel {
     if (summarizeBtn) summarizeBtn.style.display = 'none';
     if (copyBtn) copyBtn.style.display = '';
     if (regenBtn) regenBtn.style.display = '';
-    this.summaryActionsEl.style.display = '';
 
     // Auto-switch to summary tab
     this.switchTab('summary');
@@ -1032,13 +1072,15 @@ export class SubtitlePanel {
 
   private copySummary() {
     const text = this.summaryTextEl.innerText;
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).catch((err) => console.warn('BennuNote: Clipboard copy failed:', err));
     const copyBtn = this.summaryActionsEl.querySelector('[data-action="copy-summary"]') as HTMLElement;
-    if (copyBtn) {
-      const orig = copyBtn.textContent;
-      copyBtn.textContent = 'Copied!';
-      setTimeout(() => (copyBtn.textContent = orig), 1500);
-    }
+    if (copyBtn) this.flashButton(copyBtn);
+  }
+
+  private flashButton(btn: HTMLElement, label = 'Copied!', ms = 1500): void {
+    const orig = btn.textContent;
+    btn.textContent = label;
+    setTimeout(() => { btn.textContent = orig; }, ms);
   }
 
   private escapeHtml(text: string): string {
@@ -1066,11 +1108,9 @@ export class SubtitlePanel {
   }
 
   private copyText() {
-    navigator.clipboard.writeText(this.getPlainText());
+    navigator.clipboard.writeText(this.getPlainText()).catch((err) => console.warn('BennuNote: Clipboard copy failed:', err));
     const copyBtn = this.shadow.querySelector('[data-action="copy"]') as HTMLElement;
-    const orig = copyBtn.textContent;
-    copyBtn.textContent = 'Copied!';
-    setTimeout(() => (copyBtn.textContent = orig), 1500);
+    this.flashButton(copyBtn);
   }
 
   private buildFeishuMarkdown(): string {
@@ -1183,20 +1223,80 @@ export class SubtitlePanel {
     this.videoInfo = info;
   }
 
-  setSyncHandler(handler: () => void) {
-    this.onSyncFeishu = handler;
+  private showFeishuOptions() {
+    if (this.feishuOptionsEl) this.feishuOptionsEl.style.display = '';
+    if (this.footerButtonsEl) this.footerButtonsEl.style.display = 'none';
+    const chooseEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-choose');
+    const appendEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-append-panel');
+    const newEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-new-panel');
+    if (chooseEl) chooseEl.style.display = '';
+    if (appendEl) appendEl.style.display = 'none';
+    if (newEl) newEl.style.display = 'none';
   }
 
-  private parseDocToken(input: string): string {
-    input = input.trim();
-    if (!input) return '';
-    // Try to extract token from Feishu/Lark document URLs
-    // Patterns: https://xxx.larkoffice.com/docx/TOKEN, https://xxx.feishu.cn/docx/TOKEN
-    const urlMatch = input.match(/(?:larkoffice\.com|feishu\.cn|larksuite\.com)\/(?:docx|wiki|docs)\/([A-Za-z0-9]+)/);
-    if (urlMatch) return urlMatch[1];
-    // If it looks like a plain token (no slashes), use as-is
-    if (!input.includes('/')) return input;
-    return '';
+  private hideFeishuOptions() {
+    if (this.feishuOptionsEl) this.feishuOptionsEl.style.display = 'none';
+    if (this.footerButtonsEl) this.footerButtonsEl.style.display = '';
+  }
+
+  private showFeishuAppendPanel() {
+    const chooseEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-choose');
+    const appendEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-append-panel');
+    const newEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-new-panel');
+    if (chooseEl) chooseEl.style.display = 'none';
+    if (appendEl) appendEl.style.display = '';
+    if (newEl) newEl.style.display = 'none';
+    const docInput = appendEl?.querySelector<HTMLInputElement>('.bennu-wiki-doc-link');
+    const confirmBtn = appendEl?.querySelector<HTMLButtonElement>('[data-action="feishu-append"]');
+    if (confirmBtn) confirmBtn.disabled = !docInput?.value.trim();
+    docInput?.focus();
+  }
+
+  private showFeishuNewPanel() {
+    const chooseEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-choose');
+    const appendEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-append-panel');
+    const newEl = this.feishuOptionsEl?.querySelector<HTMLElement>('.bennu-feishu-new-panel');
+    if (chooseEl) chooseEl.style.display = 'none';
+    if (appendEl) appendEl.style.display = 'none';
+    if (newEl) {
+      newEl.style.display = '';
+      const nameSpan = newEl.querySelector<HTMLElement>('.bennu-wiki-space-name');
+      const confirmBtn = newEl.querySelector<HTMLButtonElement>('[data-action="feishu-new"]');
+      const hintEl = newEl.querySelector<HTMLElement>('.bennu-feishu-wiki-hint');
+      if (confirmBtn) confirmBtn.disabled = true;
+      if (hintEl) hintEl.style.display = 'none';
+      if (nameSpan) {
+        nameSpan.textContent = '…';
+        chrome.storage.local.get('bennunote_config', (data) => {
+          const config = (data.bennunote_config || {}) as Record<string, string>;
+          const spaceName = config.feishuWikiSpaceName || '';
+          nameSpan.textContent = spaceName || '(not set)';
+          if (confirmBtn) confirmBtn.disabled = !spaceName;
+          if (hintEl) hintEl.style.display = spaceName ? 'none' : '';
+        });
+      }
+    }
+  }
+
+  private syncFeishuNew() {
+    const input = this.footerEl.querySelector<HTMLInputElement>('.bennu-wiki-doc-link');
+    if (input) input.value = '';
+    this.hideFeishuOptions();
+    this.onSyncFeishu?.();
+  }
+
+  private syncFeishuAppend() {
+    const input = this.footerEl.querySelector<HTMLInputElement>('.bennu-wiki-doc-link');
+    if (!input?.value.trim()) {
+      input?.focus();
+      return;
+    }
+    this.hideFeishuOptions();
+    this.onSyncFeishu?.();
+  }
+
+  setSyncHandler(handler: () => void) {
+    this.onSyncFeishu = handler;
   }
 
   showFeishuLink(url: string) {

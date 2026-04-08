@@ -32,34 +32,6 @@ def _redact(value: str) -> str:
     return value[:4] + "***"
 
 
-def get_config_status() -> dict:
-    config = load_config()
-    status = {}
-    for key in SENSITIVE_KEYS:
-        val = config.get(key, "")
-        status[key] = {
-            "set": bool(val),
-            "preview": _redact(val) if val else "",
-        }
-    return status
-
-
-def update_config(updates: dict) -> dict:
-    config = load_config()
-    for key, value in updates.items():
-        if key in SENSITIVE_KEYS:
-            config[key] = value
-    save_config(config)
-    return get_config_status()
-
-
-def delete_config_key(key: str) -> dict:
-    config = load_config()
-    config.pop(key, None)
-    save_config(config)
-    return get_config_status()
-
-
 def is_config_complete() -> bool:
     """Check if Feishu + at least one AI provider is configured."""
     config = load_config()

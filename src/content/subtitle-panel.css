@@ -251,16 +251,6 @@
   flex-shrink: 0;
 }
 
-.bennu-wiki-doc-input input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 6px 10px;
-  font-size: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: #fff;
-}
-
 .bennu-footer-buttons {
   display: flex;
   gap: 8px;
@@ -273,6 +263,89 @@
   font-size: 13px;
   border: 1px solid #ddd;
   border-radius: 6px;
+}
+
+.bennu-feishu-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bennu-feishu-options .bennu-wiki-doc-link {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.bennu-feishu-option-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.bennu-feishu-option-buttons .bennu-btn {
+  flex: 1;
+  text-align: center;
+  padding: 6px 0;
+  font-size: 13px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.bennu-feishu-cancel-btn {
+  color: #999;
+}
+
+.bennu-feishu-append-panel,
+.bennu-feishu-new-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bennu-feishu-new-info {
+  font-size: 12px;
+  color: #555;
+  padding: 6px 8px;
+  background: #f0f7ff;
+  border-radius: 6px;
+  border: 1px solid #dde8f8;
+}
+
+.bennu-wiki-space-name {
+  font-weight: 600;
+  color: #3370ff;
+}
+
+.bennu-feishu-wiki-hint {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.bennu-feishu-settings-link {
+  color: #3370ff;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.bennu-feishu-confirm-btn {
+  background: #3370ff !important;
+  color: #fff !important;
+  border-color: #3370ff !important;
+}
+
+.bennu-feishu-confirm-btn:hover:not(:disabled) {
+  background: #2860e0 !important;
+}
+
+.bennu-feishu-confirm-btn:disabled {
+  background: #c0c4cc !important;
+  border-color: #c0c4cc !important;
+  cursor: not-allowed;
 }
 
 .bennu-status-dot {

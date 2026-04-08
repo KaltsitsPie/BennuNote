@@ -4,12 +4,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import health, transcript, feishu, summarize
+from request_context import ReqIdFilter
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    format="%(asctime)s [%(name)s] %(levelname)s [%(req_id)s]: %(message)s",
     datefmt="%H:%M:%S",
 )
+logging.getLogger().handlers[0].addFilter(ReqIdFilter())
 
 app = FastAPI(title="BennuNote Backend")
 
@@ -26,11 +28,16 @@ app.include_router(feishu.router)
 app.include_router(summarize.router)
 
 # Legacy root-level /write_feishu for backward compat during migration
-from routers.feishu import legacy_write_feishu, LegacyWriteFeishuRequest
+from routers.feishu import LegacyWriteFeishuRequest
+from services.feishu_service import legacy_write_feishu
 
 @app.post("/write_feishu")
 def root_write_feishu(req: LegacyWriteFeishuRequest):
-    return legacy_write_feishu(req)
+    return legacy_write_feishu(
+        text=req.text, title=req.title, items=req.items or [],
+        target_doc_token=req.target_doc_token or '',
+        video_info=req.video_info or {}, wiki_node=req.wiki_node or ''
+    )
 
 if __name__ == "__main__":
     import uvicorn
