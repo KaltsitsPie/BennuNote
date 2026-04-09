@@ -227,9 +227,9 @@ export class SubtitlePanel {
           </div>
           <div class="bennu-settings-section">
             <div class="bennu-settings-section-title">Feishu Wiki</div>
-            <div class="bennu-wiki-space-display" style="font-size:12px;color:#555;padding:6px 8px;background:#f0f7ff;border-radius:6px;border:1px solid #dde8f8;margin-bottom:8px">
-              Knowledge base: <span class="bennu-settings-wiki-space-name" style="font-weight:600;color:#3370ff">…</span>
-              <span class="bennu-wiki-refresh-btn" data-action="refresh-settings-wiki-space" title="Refresh" style="cursor:pointer;font-size:14px;color:#3370ff;margin-left:2px;vertical-align:middle">↻</span>
+            <div class="bennu-wiki-space-display" style="font-size:12px;color:#5A6358;padding:6px 8px;background:#F4F5F3;border-radius:6px;border:1px solid #E8EBEA;margin-bottom:8px">
+              Knowledge base: <span class="bennu-settings-wiki-space-name" style="font-weight:600;color:#5A6A4A">…</span>
+              <span class="bennu-wiki-refresh-btn" data-action="refresh-settings-wiki-space" title="Refresh" style="cursor:pointer;font-size:14px;color:#9AA097;margin-left:2px;vertical-align:middle">↻</span>
             </div>
             <div class="bennu-wiki-config">
               <div class="bennu-wiki-mode-tabs" style="display:flex;gap:4px;margin-bottom:8px">
@@ -495,17 +495,17 @@ export class SubtitlePanel {
         .then(data => {
           if (data.tokenStatus === 'valid') {
             authStatusEl.textContent = `✓ ${data.userName || 'Authenticated'}`;
-            authStatusEl.style.color = '#4caf50';
+            authStatusEl.style.color = '#5C8C6A';
             logoutBtn.style.display = '';
           } else {
             authStatusEl.textContent = '✗ Not authenticated — run ./start-server.sh';
-            authStatusEl.style.color = '#f44336';
+            authStatusEl.style.color = '#B86060';
             logoutBtn.style.display = 'none';
           }
         })
         .catch(() => {
           authStatusEl.textContent = '✗ Server offline';
-          authStatusEl.style.color = '#f44336';
+          authStatusEl.style.color = '#B86060';
           logoutBtn.style.display = 'none';
         });
     };
@@ -627,9 +627,9 @@ export class SubtitlePanel {
           }
           saveToLocal('feishuWikiSpaceName', name);
 
-          wikiCreateStatus.style.color = '#4caf50';
+          wikiCreateStatus.style.color = '#5C8C6A';
           wikiCreateStatus.innerHTML = docUrl
-            ? `✓ Created! <a href="${docUrl}" target="_blank" style="color:#00a1d6">Open in Feishu →</a>`
+            ? `✓ Created! <a href="${docUrl}" target="_blank" style="color:#717A5A">Open in Feishu →</a>`
             : '✓ Created!';
 
           if (docUrl) window.open(docUrl, '_blank');
@@ -641,7 +641,7 @@ export class SubtitlePanel {
           wikiExistingDiv.style.display = '';
           wikiCreateDiv.style.display = 'none';
         } catch (err) {
-          wikiCreateStatus.style.color = '#f44336';
+          wikiCreateStatus.style.color = '#B86060';
           wikiCreateStatus.textContent = `✗ ${err}`;
         } finally {
           wikiCreateBtn.disabled = false;
@@ -1277,7 +1277,7 @@ export class SubtitlePanel {
   setServiceStatus(online: boolean) {
     const dot = this.shadow.querySelector('.bennu-status-dot') as HTMLElement;
     if (dot) {
-      dot.style.background = online ? '#4caf50' : '#f44336';
+      dot.style.background = online ? '#5C8C6A' : '#B86060';
       dot.title = online ? 'Backend online' : 'Backend offline';
     }
   }

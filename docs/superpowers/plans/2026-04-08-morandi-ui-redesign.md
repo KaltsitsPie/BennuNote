@@ -1,3 +1,67 @@
+# Morandi UI Redesign Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Reskin BennuNote's entire UI to a minimalist Morandi palette with `#A6B3A7` as primary accent, replacing Bilibili blue throughout — no functional, DOM structure, or TypeScript changes.
+
+**Architecture:** Three files change: `src/content/subtitle-panel.css` (918-line reskin), `src/popup/popup.html` (inline CSS update), `src/options/options.html` (inline CSS update). No `.ts` files touched. All Shadow DOM class names (`bennu-*`) stay unchanged.
+
+**Tech Stack:** CSS, Chrome Extension MV3 (Shadow DOM), TypeScript build via `npm run build`
+
+---
+
+## Color Mapping Reference
+
+| Old Value | New Value | Role |
+|-----------|-----------|------|
+| `#00a1d6` | `#A6B3A7` | Primary accent |
+| `#0090c0` | `#96A497` | Accent hover |
+| `rgba(0,0,0,0.15)` | `rgba(45,53,48,0.10)` | Shadow alpha |
+| `#f8f9fa` / `#fafafa` | `#FAFBFA` | Header/footer/lang-bar bg |
+| `#f0f7ff` | `#F4F5F3` | Hover bg, info boxes |
+| `#dde8f8` | `#D4DDD5` | Info box border |
+| `#eee` | `#E8EBEA` | Borders |
+| `#ddd` | `#D8DDD9` | Input/button borders |
+| `#d0d0d0` | `#D8DDD9` | Input borders |
+| `#333` | `#2D3530` | Primary text |
+| `#555` / `#666` | `#5A6358` | Secondary text |
+| `#888` / `#999` / `#aaa` | `#9AA097` | Muted text |
+| `#e8f5e9` | `#EBF0EB` | Success/badge bg |
+| `#2e7d32` | `#6B8A6E` | Success/badge text |
+| `#4caf50` | `#5C8C6A` | Success color |
+| `#f44336` / `#f44747` | `#B86060` | Error color |
+| `#ff9800` | `#B89A5C` | Warning color |
+| `#e8f4ff` | `#EBF0EB` | Provider tab active bg |
+| `#e0e0e0` | `#E0E4E1` | Hover bg (generic) |
+| `#f0f0f0` | `#F0F2F1` | Hover bg (light) |
+| **Log colors** | | |
+| `#1e1e1e` (log bg) | `#F4F5F3` | Log background (light!) |
+| `#d4d4d4` (log text) | `#4A5248` | Log default text |
+| `#6a9955` (log time) | `#A6B3A7` | Log timestamp |
+| `#9cdcfe` (log info) | `#7A9880` | Log info |
+| `#4ec9b0` (log ok) | `#5C8C6A` | Log success |
+| `#dcdcaa` (log warn) | `#B89A5C` | Log warning |
+| `#f44747` (log err) | `#B86060` | Log error |
+| `#c586c0` (log step) | `#7A6E8C` | Log step |
+| **Keep unchanged** | | |
+| `#3370ff` | `#3370ff` | Feishu brand blue |
+| `#2860e0` | `#2860e0` | Feishu brand hover |
+| `#1e1e1e` (`.bennu-setup-cmd`) | `#1e1e1e` | Code display box (intentional dark) |
+
+**Border radius changes:** Panel `12px` → `14px`; buttons/inputs `6px` → `7px` where specified below.
+
+---
+
+## Task 1: :host, panel shell, header
+
+**Files:**
+- Modify: `src/content/subtitle-panel.css:1-78`
+
+- [ ] **Step 1: Replace :host, .bennu-panel, .bennu-header, .bennu-title, .bennu-source-badge, .bennu-btn**
+
+Replace lines 1–78 with:
+
+```css
 :host {
   all: initial;
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
@@ -78,7 +142,27 @@
   line-height: 1;
   padding: 2px 6px !important;
 }
+```
 
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/content/subtitle-panel.css
+git commit -m "style: update panel shell, header, badge to Morandi palette"
+```
+
+---
+
+## Task 2: Tabs, language bar, progress bar
+
+**Files:**
+- Modify: `src/content/subtitle-panel.css:80-156`
+
+- [ ] **Step 1: Replace tabs, language bar, and progress bar rules**
+
+Replace lines 80–156 with:
+
+```css
 /* Tabs */
 .bennu-tabs {
   display: flex;
@@ -105,8 +189,8 @@
 }
 
 .bennu-tab.active {
-  color: #717A5A;
-  border-bottom-color: #717A5A;
+  color: #A6B3A7;
+  border-bottom-color: #A6B3A7;
   font-weight: 500;
 }
 
@@ -140,7 +224,7 @@
 }
 
 .bennu-lang-select:focus {
-  border-color: #717A5A;
+  border-color: #A6B3A7;
 }
 
 /* Progress bar */
@@ -154,10 +238,30 @@
 
 .bennu-progress-fill {
   height: 100%;
-  background: #717A5A;
+  background: #A6B3A7;
   transition: width 0.3s;
 }
+```
 
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/content/subtitle-panel.css
+git commit -m "style: update tabs, language bar, progress bar to Morandi"
+```
+
+---
+
+## Task 3: Subtitle list
+
+**Files:**
+- Modify: `src/content/subtitle-panel.css:158-241`
+
+- [ ] **Step 1: Replace tab-content, log, and subtitle rules**
+
+Replace lines 158–241 with:
+
+```css
 /* Tab content */
 .bennu-tab-content {
   display: none;
@@ -189,7 +293,7 @@
 }
 
 .bennu-log-time {
-  color: #8A9A7A;
+  color: #A6B3A7;
   margin-right: 6px;
 }
 
@@ -241,7 +345,27 @@
   color: #9AA097;
   font-size: 13px;
 }
+```
 
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/content/subtitle-panel.css
+git commit -m "style: update log panel (dark→light Morandi) and subtitle list"
+```
+
+---
+
+## Task 4: Footer and Feishu option panels
+
+**Files:**
+- Modify: `src/content/subtitle-panel.css:242-400`
+
+- [ ] **Step 1: Replace footer, feishu-options, feishu-panels, feishu-link rules**
+
+Replace lines 242–400 with:
+
+```css
 /* Footer */
 .bennu-footer {
   display: flex;
@@ -327,13 +451,13 @@
 
 .bennu-wiki-space-name {
   font-weight: 600;
-  color: #5A6A4A;
+  color: #3370ff;
 }
 
 .bennu-wiki-refresh-btn {
   cursor: pointer;
   font-size: 14px;
-  color: #9AA097;
+  color: #3370ff;
   user-select: none;
   vertical-align: middle;
   margin-left: 2px;
@@ -349,7 +473,7 @@
 }
 
 .bennu-feishu-settings-link {
-  color: #717A5A;
+  color: #3370ff;
   cursor: pointer;
   text-decoration: underline;
 }
@@ -400,14 +524,34 @@
   border-radius: 0 0 14px 14px;
 }
 .bennu-feishu-url {
-  color: #717A5A;
+  color: #3370ff;
   font-size: 13px;
   text-decoration: none;
 }
 .bennu-feishu-url:hover {
   text-decoration: underline;
 }
+```
 
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/content/subtitle-panel.css
+git commit -m "style: update footer and Feishu option panels to Morandi"
+```
+
+---
+
+## Task 5: Summary tab
+
+**Files:**
+- Modify: `src/content/subtitle-panel.css:401-571`
+
+- [ ] **Step 1: Replace summary tab rules**
+
+Replace lines 401–571 with:
+
+```css
 /* Summary tab */
 .bennu-summary-empty {
   padding: 24px 16px;
@@ -505,7 +649,7 @@
 }
 
 .bennu-setup-link {
-  color: #717A5A;
+  color: #A6B3A7;
   text-decoration: none;
 }
 
@@ -553,8 +697,8 @@
 }
 
 .bennu-setup-input:focus {
-  border-color: #717A5A;
-  box-shadow: 0 0 0 2px rgba(113,122,90,0.18);
+  border-color: #A6B3A7;
+  box-shadow: 0 0 0 2px rgba(166,179,167,0.18);
 }
 
 .bennu-setup-error {
@@ -579,16 +723,36 @@
 }
 
 .bennu-setup-actions .bennu-btn[data-action="save-token"] {
-  background: #717A5A;
+  background: #A6B3A7;
   color: #fff;
-  border-color: #717A5A;
+  border-color: #A6B3A7;
 }
 
 .bennu-setup-actions .bennu-btn[data-action="save-token"]:hover {
-  background: #626A4C;
-  border-color: #626A4C;
+  background: #96A497;
+  border-color: #96A497;
 }
+```
 
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/content/subtitle-panel.css
+git commit -m "style: update summary tab and token setup form to Morandi"
+```
+
+---
+
+## Task 6: Feishu setup form
+
+**Files:**
+- Modify: `src/content/subtitle-panel.css:573-608`
+
+- [ ] **Step 1: Replace Feishu setup form rules**
+
+Replace lines 573–608 with:
+
+```css
 /* Feishu setup form */
 .bennu-feishu-setup {
   padding: 16px;
@@ -625,7 +789,27 @@
 .bennu-feishu-save-btn:hover {
   background: #2860e0 !important;
 }
+```
 
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/content/subtitle-panel.css
+git commit -m "style: update Feishu setup form to Morandi"
+```
+
+---
+
+## Task 7: Settings tab
+
+**Files:**
+- Modify: `src/content/subtitle-panel.css:610-765`
+
+- [ ] **Step 1: Replace settings tab rules**
+
+Replace lines 610–765 with:
+
+```css
 /* Settings tab */
 .bennu-settings {
   flex: 1;
@@ -668,7 +852,7 @@
   flex-shrink: 0;
 }
 .bennu-secret-dot.set {
-  background: #717A5A;
+  background: #A6B3A7;
 }
 
 .bennu-secret-label {
@@ -719,12 +903,12 @@
   box-sizing: border-box;
 }
 .bennu-secret-edit input:focus {
-  border-color: #717A5A;
+  border-color: #A6B3A7;
 }
 .bennu-secret-save {
   font-size: 11px !important;
   padding: 4px 10px !important;
-  background: #717A5A !important;
+  background: #A6B3A7 !important;
   color: #fff !important;
   border: none;
   border-radius: 5px;
@@ -753,7 +937,7 @@
 }
 .bennu-settings-input:focus,
 .bennu-settings-select:focus {
-  border-color: #717A5A;
+  border-color: #A6B3A7;
 }
 
 .bennu-settings-conditional {
@@ -766,14 +950,14 @@
   padding: 7px 0;
   text-align: center;
   font-size: 12px;
-  border: 1px solid #717A5A;
+  border: 1px solid #A6B3A7;
   border-radius: 7px;
-  background: #717A5A !important;
+  background: #A6B3A7 !important;
   color: #fff !important;
 }
 .bennu-settings-save:hover {
-  background: #626A4C !important;
-  border-color: #626A4C !important;
+  background: #96A497 !important;
+  border-color: #96A497 !important;
 }
 
 .bennu-settings-toast {
@@ -782,7 +966,27 @@
   color: #5C8C6A;
   margin-top: 6px;
 }
+```
 
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/content/subtitle-panel.css
+git commit -m "style: update settings tab (secret rows, inputs, status dots) to Morandi"
+```
+
+---
+
+## Task 8: Toast, provider tabs, model select, settings guide
+
+**Files:**
+- Modify: `src/content/subtitle-panel.css:766-918`
+
+- [ ] **Step 1: Replace toast, provider tabs, model select, guide, scope-box rules**
+
+Replace lines 766–918 with:
+
+```css
 /* Floating toast */
 .bennu-toast {
   position: absolute;
@@ -835,7 +1039,7 @@
 .bennu-provider-tab:hover { background: #F4F5F3; }
 .bennu-provider-tab.active {
   background: #EBF0EB;
-  color: #717A5A;
+  color: #A6B3A7;
   font-weight: 500;
 }
 .bennu-provider-panel { display: none; }
@@ -852,14 +1056,14 @@
   color: #5A6358;
   outline: none;
 }
-.bennu-model-select:focus { border-color: #717A5A; }
+.bennu-model-select:focus { border-color: #A6B3A7; }
 
 .bennu-settings-guide {
   margin-top: 6px;
 }
 .bennu-settings-guide summary {
   cursor: pointer;
-  color: #717A5A;
+  color: #A6B3A7;
   font-size: 10px;
   user-select: none;
   padding: 2px 0;
@@ -889,7 +1093,7 @@
   margin-bottom: 3px;
 }
 .bennu-guide-content a {
-  color: #717A5A;
+  color: #A6B3A7;
   text-decoration: none;
 }
 .bennu-guide-content a:hover { text-decoration: underline; }
@@ -935,3 +1139,299 @@
   background: #E8EBEA;
   color: #2D3530;
 }
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/content/subtitle-panel.css
+git commit -m "style: update toast, provider tabs, settings guide to Morandi"
+```
+
+---
+
+## Task 9: Update popup.html
+
+**Files:**
+- Modify: `src/popup/popup.html`
+
+- [ ] **Step 1: Replace the `<style>` block inside popup.html**
+
+The `<style>` block (lines 5–71) currently uses `#00a1d6`, `#0090c0`, and `rgba(0,161,214,0.15)`. Replace it with:
+
+```html
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 280px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      color: #2D3530;
+    }
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .title-icon {
+      width: 24px;
+      height: 24px;
+    }
+    .status {
+      font-size: 13px;
+      color: #9AA097;
+      margin-bottom: 12px;
+    }
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #A6B3A7;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #96A497; }
+    .btn:disabled {
+      background: #C8CEC9;
+      cursor: not-allowed;
+    }
+    .lang-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .lang-row label {
+      font-size: 13px;
+      color: #5A6358;
+      white-space: nowrap;
+    }
+    .lang-select {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #D8DDD9;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+    }
+    .lang-select:focus {
+      outline: none;
+      border-color: #A6B3A7;
+      box-shadow: 0 0 0 2px rgba(166,179,167,0.18);
+    }
+  </style>
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/popup/popup.html
+git commit -m "style: update popup to Morandi palette"
+```
+
+---
+
+## Task 10: Update options.html
+
+**Files:**
+- Modify: `src/options/options.html`
+
+- [ ] **Step 1: Replace the `<style>` block inside options.html**
+
+The `<style>` block (lines 5–138) uses `#00a1d6`, `#0090c0`, `rgba(0,161,214,0.15)`, `#4caf50`, `#f8f9fa`, `#e8f5e9`, `#2e7d32`, `#fbe9e7`, `#c62828`, `#ef9a9a`, `#ccc`. Replace it with:
+
+```html
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 480px;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      color: #2D3530;
+      background: #F4F5F3;
+    }
+    h1 { font-size: 20px; margin-bottom: 20px; }
+    .section { margin-bottom: 20px; }
+    .section h2 {
+      font-size: 13px;
+      color: #9AA097;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #E8EBEA;
+      font-weight: 600;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: #5A6358;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #D8DDD9;
+      border-radius: 7px;
+      font-size: 13px;
+      margin-bottom: 12px;
+      background: #fff;
+      color: #2D3530;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #A6B3A7;
+      box-shadow: 0 0 0 2px rgba(166,179,167,0.18);
+    }
+    .btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      background: #A6B3A7;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn:hover { background: #96A497; }
+    .toast {
+      display: none;
+      padding: 8px 14px;
+      background: #5C8C6A;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    .conditional { display: none; }
+    .conditional.visible { display: block; }
+
+    /* Server secrets */
+    .server-status {
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .server-status.online { background: #EBF0EB; color: #5C8C6A; }
+    .server-status.offline { background: #F5EAEA; color: #B86060; }
+    .server-status.loading { background: #F5EFE0; color: #B89A5C; }
+
+    .secret-row {
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid #E8EBEA;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .secret-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .secret-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #2D3530;
+      flex: 1;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #C8CEC9;
+      flex-shrink: 0;
+    }
+    .status-dot.set { background: #A6B3A7; }
+    .secret-preview {
+      font-size: 12px;
+      color: #9AA097;
+      font-family: monospace;
+      margin-right: 8px;
+    }
+    .btn-sm {
+      padding: 4px 10px;
+      border: 1px solid #D8DDD9;
+      border-radius: 5px;
+      background: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      color: #5A6358;
+    }
+    .btn-sm:hover { background: #F4F5F3; }
+    .btn-sm.danger { color: #B86060; border-color: #D9B0B0; }
+    .btn-sm.danger:hover { background: #F5EAEA; }
+
+    .secret-edit {
+      display: none;
+      margin-top: 8px;
+    }
+    .secret-edit.visible { display: flex; gap: 6px; }
+    .secret-edit input {
+      flex: 1;
+      margin-bottom: 0;
+      font-size: 12px;
+      padding: 6px 8px;
+    }
+    .secret-edit .btn-sm { flex-shrink: 0; align-self: center; }
+  </style>
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/options/options.html
+git commit -m "style: update options page to Morandi palette"
+```
+
+---
+
+## Task 11: Build verification
+
+**Files:** None (read-only verification)
+
+- [ ] **Step 1: Run build**
+
+```bash
+cd /Users/bytedance/Documents/BennuNote && npm run build
+```
+
+Expected: build completes with no errors. Output in `dist/`.
+
+- [ ] **Step 2: Spot-check output CSS exists**
+
+```bash
+ls dist/content/
+```
+
+Expected: `subtitle-panel.css` (or bundled into JS) present.
+
+- [ ] **Step 3: Visual check in browser**
+
+Load `dist/` as unpacked extension in `chrome://extensions/` (Developer mode). Open a Bilibili video and verify:
+
+1. Panel appears with `border-radius: 14px`, green-tinted shadow
+2. Active tab shows Morandi green `#A6B3A7` underline
+3. Log tab: light `#F4F5F3` background (not dark)
+4. Subtitle hover: `#F4F5F3` (not blue)
+5. Primary buttons: Morandi green `#A6B3A7`
+6. Feishu confirm button: still `#3370ff`
+7. Token setup code box: still dark `#1e1e1e`
+8. Popup button: Morandi green
+9. Options page button: Morandi green, status dots green
+
+- [ ] **Step 4: Final commit (if any fixups needed)**
+
+```bash
+git add -p
+git commit -m "style: fixup Morandi UI reskin"
+```
