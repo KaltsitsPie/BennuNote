@@ -1,6 +1,7 @@
 import { extractVideoInfo, fetchSubtitles, loadTrack, setLogFn } from './bilibili-api';
 import { extractYouTubeSubtitles, setYtLogFn } from './youtube-api';
 import { SubtitlePanel } from './subtitle-panel';
+import { extractPageContent } from './webpage-extractor';
 import type { Message } from '../shared/messages';
 import type { SubtitleItem, VideoInfo } from '../shared/types';
 import { getConfig, parseFeishuToken } from '../shared/utils';
@@ -10,6 +11,9 @@ let currentVideoInfo: VideoInfo | null = null;
 let currentItems: SubtitleItem[] = [];
 let backendOnline = false;
 let currentReqId = '';
+let currentMode: 'video' | 'webpage' = 'video';
+let currentPageInfo: { title: string; url: string } | null = null;
+let currentPageText = '';
 
 // --- Video doc map (cross-session persistence for Feishu doc tokens) ---
 
@@ -38,7 +42,57 @@ function getPanel(): SubtitlePanel {
     setYtLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
 
     panel.setSyncHandler(async () => {
-      if (!currentVideoInfo || !panel) return;
+      if (!panel) return;
+      if (currentMode === 'webpage' && currentPageInfo) {
+        // Webpage mode: sync page title + summary to Feishu
+        const p = panel!;
+        const summaryText = p.getSummaryText();
+        if (!summaryText) {
+          p.showToast('Generate a summary first', 'warn');
+          return;
+        }
+        p.setFeishuSyncing(true);
+        p.log('Syncing page summary to Feishu Wiki...', 'step');
+        const title = `${currentPageInfo.title} - ${new Date().toLocaleDateString('zh-CN')}`;
+        chrome.runtime.sendMessage(
+          {
+            type: 'WRITE_FEISHU',
+            text: '',
+            title,
+            items: [],
+            videoInfo: {
+              bvid: '',
+              title: currentPageInfo.title,
+              videoUrl: currentPageInfo.url,
+            },
+            summary: summaryText,
+            appendSummaryOnly: false,
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              const errMsg = chrome.runtime.lastError.message || 'Unknown error';
+              p.log(`Feishu sync failed: ${errMsg}`, 'error');
+              p.showToast(`Sync failed: ${errMsg}`, 'error');
+              p.setFeishuSyncing(false);
+              return;
+            }
+            if (response?.success && response.docUrl) {
+              p.log('Feishu sync successful!', 'success');
+              if (response.warning) p.log(`Warning: ${response.warning}`, 'warn');
+              p.showToast('Synced to Feishu', 'success', 3000);
+              p.showFeishuLink(response.docUrl);
+              window.open(response.docUrl, '_blank');
+            } else {
+              const errMsg = response?.error || 'Unknown error';
+              p.log(`Feishu sync failed: ${errMsg}`, 'error');
+              p.showToast(`Sync failed: ${errMsg}`, 'error');
+            }
+            p.setFeishuSyncing(false);
+          },
+        );
+        return;
+      }
+      if (!currentVideoInfo) return;
       const p = panel!;
       const videoId = getVideoId(currentVideoInfo);
       const summaryText = p.getSummaryText();
@@ -143,12 +197,14 @@ function getPanel(): SubtitlePanel {
     });
 
     panel.setSummarizeHandler(() => {
-      if (!currentVideoInfo || currentItems.length === 0 || !panel) return;
+      if (!panel) return;
+      if (currentMode === 'video' && (!currentVideoInfo || currentItems.length === 0)) return;
+      if (currentMode === 'webpage' && !currentPageInfo) return;
       const p = panel!;
       p.setSummarizing(true);
       p.log('Generating AI summary...', 'step');
-      const text = currentItems.map(i => i.content).join('\n');
-      const title = currentVideoInfo!.title;
+      const text = currentMode === 'webpage' ? currentPageText : currentItems.map(i => i.content).join('\n');
+      const title = currentMode === 'webpage' ? currentPageInfo!.title : currentVideoInfo!.title;
       chrome.storage.local.get('bennunote_config', (data) => {
         const maxTokens = (data.bennunote_config as Record<string, unknown>)?.maxTokens as number || 4096;
         chrome.runtime.sendMessage({ type: 'SUMMARIZE', text, title, maxTokens }, (response) => {
@@ -212,7 +268,11 @@ async function fetchTranscript(
 chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
   try {
     if (msg.type === 'EXTRACT_SUBTITLES') {
+      currentMode = 'video';
       handleExtract(msg.language || 'zh');
+      sendResponse({ ok: true });
+    } else if (msg.type === 'SUMMARIZE_PAGE') {
+      handleExtractWebPage();
       sendResponse({ ok: true });
     }
   } catch (err) {
@@ -300,6 +360,57 @@ async function handleExtractYouTube(language: string) {
   p.log(`${result.items.length} subtitle entries`, 'success');
   currentItems = result.items;
   p.setSubtitles(result.items, result.source);
+}
+
+function handleExtractWebPage() {
+  const p = getPanel();
+  p.show();
+  currentMode = 'webpage';
+  currentVideoInfo = null;
+  currentItems = [];
+  p.setMode('webpage');
+
+  p.log('--- New web page summary started ---', 'step');
+  p.log(`URL: ${window.location.href}`, 'info');
+
+  const { text, title, url } = extractPageContent();
+  currentPageInfo = { title, url };
+
+  if (!text || text.length < 50) {
+    p.log('Could not extract meaningful content from this page.', 'error');
+    return;
+  }
+
+  p.log(`Extracted ${text.length} characters (title: "${title}")`, 'info');
+
+  const truncated = text.length > 50000 ? text.slice(0, 50000) : text;
+  if (text.length > 50000) {
+    p.log('Content truncated to 50k characters for summarization.', 'warn');
+  }
+  currentPageText = truncated;
+
+  p.setSummarizing(true);
+  p.log('Generating AI summary...', 'step');
+
+  chrome.storage.local.get('bennunote_config', (data) => {
+    const maxTokens = (data.bennunote_config as Record<string, unknown>)?.maxTokens as number || 4096;
+    chrome.runtime.sendMessage(
+      { type: 'SUMMARIZE', text: truncated, title, maxTokens },
+      (response) => {
+        p.setSummarizing(false);
+        if (chrome.runtime.lastError) {
+          p.log(`Summary failed: ${chrome.runtime.lastError.message}`, 'error');
+          return;
+        }
+        if (response?.success && response.summary) {
+          p.log('Summary generated!', 'success');
+          p.setSummary(response.summary);
+        } else {
+          p.log(`Summary failed: ${response?.error || 'Unknown error'}`, 'error');
+        }
+      },
+    );
+  });
 }
 
 async function handleExtract(language: string) {

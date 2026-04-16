@@ -1,6 +1,11 @@
 const statusDot = document.getElementById('status-dot')!;
 const statusText = document.getElementById('status-text')!;
 const btn = document.getElementById('extract-btn') as HTMLButtonElement;
+const langSelect = document.getElementById('lang-select') as HTMLSelectElement;
+const langRow = document.getElementById('lang-row') as HTMLElement;
+
+let isVideo = false;
+btn.disabled = true;
 
 async function checkHealth(): Promise<boolean> {
   try {
@@ -13,32 +18,50 @@ async function checkHealth(): Promise<boolean> {
 }
 
 async function init() {
-  // Check if on bilibili video page
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tabs[0]?.url || '';
   const isBilibili = url.includes('bilibili.com/video/');
   const isYouTube = url.includes('youtube.com/watch');
-  if (!isBilibili && !isYouTube) {
-    statusText.textContent = 'Please navigate to a Bilibili or YouTube video page';
+  const isRestricted =
+    url.startsWith('chrome://') ||
+    url.startsWith('edge://') ||
+    url.startsWith('about:') ||
+    url === '';
+
+  isVideo = isBilibili || isYouTube;
+
+  if (isRestricted) {
+    statusText.textContent = 'This page cannot be summarized';
     btn.disabled = true;
+    langRow.style.display = 'none';
     return;
   }
 
-  // Check backend health (informational only — Stage 1 doesn't need it)
+  if (isVideo) {
+    langRow.style.display = '';
+    btn.textContent = 'Extract Subtitles';
+  } else {
+    langRow.style.display = 'none';
+    btn.textContent = 'Summarize Page';
+  }
+
   const healthy = await checkHealth();
   statusDot.style.background = healthy ? '#4caf50' : '#f44336';
   statusText.textContent = healthy
     ? 'Service online'
     : 'Backend offline — transcription fallback unavailable';
+  btn.disabled = false;
 }
 
 init();
 
-const langSelect = document.getElementById('lang-select') as HTMLSelectElement;
-
 btn.addEventListener('click', () => {
   btn.disabled = true;
-  statusText.textContent = 'Extracting...';
-  chrome.runtime.sendMessage({ type: 'EXTRACT_SUBTITLES', language: langSelect.value });
+  statusText.textContent = isVideo ? 'Extracting...' : 'Summarizing...';
+  if (isVideo) {
+    chrome.runtime.sendMessage({ type: 'EXTRACT_SUBTITLES', language: langSelect.value });
+  } else {
+    chrome.runtime.sendMessage({ type: 'SUMMARIZE_PAGE' });
+  }
   setTimeout(() => window.close(), 300);
 });

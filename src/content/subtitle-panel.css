@@ -355,18 +355,18 @@
 }
 
 .bennu-feishu-confirm-btn {
-  background: #3370ff !important;
+  background: #717A5A !important;
   color: #fff !important;
-  border-color: #3370ff !important;
+  border-color: #717A5A !important;
 }
 
 .bennu-feishu-confirm-btn:hover:not(:disabled) {
-  background: #2860e0 !important;
+  background: #626A4C !important;
 }
 
 .bennu-feishu-confirm-btn:disabled {
-  background: #c0c4cc !important;
-  border-color: #c0c4cc !important;
+  background: #C8CEC9 !important;
+  border-color: #C8CEC9 !important;
   cursor: not-allowed;
 }
 
@@ -381,12 +381,12 @@
 }
 
 .bennu-feishu-btn {
-  background: #3370ff !important;
+  background: #717A5A !important;
   color: #fff !important;
-  border-color: #3370ff !important;
+  border-color: #717A5A !important;
 }
 .bennu-feishu-btn:hover {
-  background: #2860e0 !important;
+  background: #626A4C !important;
 }
 .bennu-feishu-btn:disabled {
   background: #9AA097 !important;
@@ -617,13 +617,13 @@
 }
 
 .bennu-feishu-save-btn {
-  background: #3370ff !important;
+  background: #717A5A !important;
   color: #fff !important;
-  border-color: #3370ff !important;
+  border-color: #717A5A !important;
 }
 
 .bennu-feishu-save-btn:hover {
-  background: #2860e0 !important;
+  background: #626A4C !important;
 }
 
 /* Settings tab */

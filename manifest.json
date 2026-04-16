@@ -38,18 +38,13 @@
       "world": "MAIN"
     },
     {
-      "matches": ["*://*.bilibili.com/video/*"],
-      "js": ["src/content/index.ts"],
-      "run_at": "document_idle"
-    },
-    {
       "matches": ["*://*.youtube.com/watch*"],
       "js": ["src/content/youtube-page-bridge.ts"],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["*://*.youtube.com/watch*"],
+      "matches": ["<all_urls>"],
       "js": ["src/content/index.ts"],
       "run_at": "document_idle"
     }

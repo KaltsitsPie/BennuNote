@@ -6,6 +6,11 @@ export interface ExtractRequest {
   language: string;
 }
 
+// Popup → Content Script: summarize current web page
+export interface SummarizePageRequest {
+  type: 'SUMMARIZE_PAGE';
+}
+
 // Content Script → Background: request backend transcription
 export interface TranscriptRequest {
   type: 'TRANSCRIPT_REQUEST';
@@ -68,6 +73,7 @@ export interface SummarizeResult {
 
 export type Message =
   | ExtractRequest
+  | SummarizePageRequest
   | TranscriptRequest
   | TranscriptResult
   | WriteFeishuRequest

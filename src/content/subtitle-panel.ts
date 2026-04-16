@@ -859,6 +859,15 @@ export class SubtitlePanel {
     return parseFeishuToken(input?.value.trim() || '') ?? '';
   }
 
+  setMode(mode: 'video' | 'webpage') {
+    const isWebpage = mode === 'webpage';
+    this.tabSubtitle.style.display = isWebpage ? 'none' : '';
+    this.contentSubtitle.style.display = isWebpage ? 'none' : '';
+    if (isWebpage) {
+      this.switchTab('summary');
+    }
+  }
+
   show() {
     this.panelEl.classList.remove('hidden');
   }
@@ -1229,7 +1238,10 @@ export class SubtitlePanel {
     }
 
     if (this.summaryText) {
-      lines.push('', '## 摘要', '', this.summaryText);
+      const demotedSummary = this.summaryText.replace(/^(#{1,6}) /gm, (_, hashes) => {
+        return '#'.repeat(Math.min(hashes.length + 2, 6)) + ' ';
+      });
+      lines.push('', '## 摘要', '', demotedSummary);
     }
 
     lines.push('');

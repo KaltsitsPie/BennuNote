@@ -35,7 +35,7 @@ function getAIParams(config: BennuNoteConfig): { provider: string; apiKey: strin
 }
 
 chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
-  if (msg.type === 'EXTRACT_SUBTITLES') {
+  if (msg.type === 'EXTRACT_SUBTITLES' || msg.type === 'SUMMARIZE_PAGE') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tabId = tabs[0]?.id;
       if (tabId) {
