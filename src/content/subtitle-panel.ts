@@ -987,6 +987,7 @@ export class SubtitlePanel {
       bcut_asr: 'Bcut ASR',
       yt_cc: 'YouTube CC',
       yt_auto: 'YouTube Auto',
+      generic_vtt: 'WebVTT',
     };
     this.sourceBadge.textContent = sourceLabels[source];
     this.sourceBadge.style.display = '';

@@ -45,6 +45,7 @@ def transcript(req: TranscriptRequest):
     set_req_id(req_id)
     url = req.video_url if req.video_url else f"https://www.bilibili.com/video/{req.bvid}"
     is_youtube = "youtube.com" in url or "youtu.be" in url
+    is_bilibili = "bilibili.com" in url
     logger.info("Transcript request: req_id=%s, url=%s, model_size=%s, language=%s", req_id, url, req.model_size, req.language)
 
     try:
@@ -62,7 +63,7 @@ def transcript(req: TranscriptRequest):
                     audio_path = download_audio(url, req.cookie, tmpdir)
                     source = "whisper"
                     items = transcribe_audio(audio_path, req.model_size, req.language)
-            else:
+            elif is_bilibili:
                 # Bilibili: download audio, try Bcut ASR first, fall back to Whisper.
                 audio_path = download_audio(url, req.cookie, tmpdir)
                 source = "bcut_asr"
@@ -74,6 +75,13 @@ def transcript(req: TranscriptRequest):
                     logger.warning("Bcut ASR failed (%s), falling back to Whisper...", e)
                     source = "whisper"
                     items = transcribe_audio(audio_path, req.model_size, req.language)
+            else:
+                # Generic site: yt-dlp download → Whisper transcription only.
+                logger.info("Generic URL — downloading audio via yt-dlp...")
+                audio_path = download_audio(url, req.cookie, tmpdir)
+                source = "whisper"
+                items = transcribe_audio(audio_path, req.model_size, req.language)
+                logger.info("Generic transcription: %d segments via Whisper", len(items))
 
         full_text = "\n".join(item["content"] for item in items)
         duration = items[-1]["to"] if items else 0.0

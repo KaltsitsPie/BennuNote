@@ -47,9 +47,16 @@ async function init() {
 
   const healthy = await checkHealth();
   statusDot.style.background = healthy ? '#4caf50' : '#f44336';
-  statusText.textContent = healthy
-    ? 'Service online'
-    : 'Backend offline — transcription fallback unavailable';
+
+  if (isBilibili) {
+    statusText.textContent = healthy ? 'Bilibili — Service online' : 'Bilibili — Backend offline';
+  } else if (isYouTube) {
+    statusText.textContent = healthy ? 'YouTube — Service online' : 'YouTube — Backend offline';
+  } else {
+    statusText.textContent = healthy
+      ? 'Ready to summarize'
+      : 'Backend offline — summarization may be limited';
+  }
   btn.disabled = false;
 }
 

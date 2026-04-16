@@ -3,7 +3,7 @@
   "name": "BennuNote",
   "version": "0.1.0",
   "description": "Extract subtitles and transcribe speech from Bilibili videos",
-  "permissions": ["activeTab", "storage"],
+  "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": [
     "*://*.bilibili.com/*",
     "*://*.hdslb.com/*",

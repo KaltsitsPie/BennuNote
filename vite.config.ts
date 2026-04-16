@@ -10,8 +10,11 @@ import path from 'path';
  * module to web_accessible_resources for the FIRST match (Bilibili). The
  * YouTube content script loader then fails silently because it can't import
  * the module. This plugin copies the missing resources into YouTube's WAR entry.
+ *
+ * Also adds a <all_urls> WAR entry so the content script can be programmatically
+ * injected on generic sites (non-Bilibili, non-YouTube) via chrome.scripting.
  */
-function fixYouTubeWebAccessibleResources(): Plugin {
+function fixWebAccessibleResources(): Plugin {
   return {
     name: 'fix-youtube-war',
     apply: 'build',
@@ -32,10 +35,23 @@ function fixYouTubeWebAccessibleResources(): Plugin {
         const before = youtubeEntry.resources.length;
         youtubeEntry.resources = [...new Set([...youtubeEntry.resources, ...toAdd])];
         if (youtubeEntry.resources.length > before) {
-          fs.writeFileSync(manifestPath, JSON.stringify(mf, null, 2));
           console.log('[fix-youtube-war] Added to YouTube WAR:', toAdd);
         }
       }
+
+      // Add <all_urls> WAR entry for generic site programmatic injection
+      const genericEntry = war.find(e => e.matches.some(m => m === '<all_urls>'));
+      if (!genericEntry && bilibiliEntry) {
+        const genericResources = bilibiliEntry.resources.filter(r => !r.includes('page-bridge'));
+        war.push({
+          matches: ['<all_urls>'],
+          resources: genericResources,
+          use_dynamic_url: false,
+        });
+        console.log('[fix-youtube-war] Added <all_urls> WAR for generic sites:', genericResources);
+      }
+
+      fs.writeFileSync(manifestPath, JSON.stringify(mf, null, 2));
     },
   };
 }
@@ -43,7 +59,7 @@ function fixYouTubeWebAccessibleResources(): Plugin {
 export default defineConfig({
   plugins: [
     crx({ manifest }),
-    fixYouTubeWebAccessibleResources(),
+    fixWebAccessibleResources(),
   ],
   build: {
     rollupOptions: {

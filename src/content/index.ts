@@ -1,5 +1,9 @@
 import { extractVideoInfo, fetchSubtitles, loadTrack, setLogFn } from './bilibili-api';
 import { extractYouTubeSubtitles, setYtLogFn } from './youtube-api';
+import {
+  detectVideos, pickBestVideo, extractTrackSubtitles,
+  buildGenericVideoInfo, setGenericLogFn,
+} from './generic-video-api';
 import { SubtitlePanel } from './subtitle-panel';
 import { extractPageContent } from './webpage-extractor';
 import type { Message } from '../shared/messages';
@@ -20,7 +24,7 @@ let currentPageText = '';
 type VideoDocEntry = { docToken: string; summaryAppended: boolean };
 
 function getVideoId(info: VideoInfo): string {
-  return info.bvid || info.youtubeVideoId || '';
+  return info.bvid || info.youtubeVideoId || info.genericVideoUrl || '';
 }
 
 async function readVideoDocMap(): Promise<Record<string, VideoDocEntry>> {
@@ -40,6 +44,7 @@ function getPanel(): SubtitlePanel {
     // Wire up log so bilibili-api.ts can emit to the panel too
     setLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
     setYtLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
+    setGenericLogFn((msg, level) => panel!.log(msg, (level as 'info') || 'info'));
 
     panel.setSyncHandler(async () => {
       if (!panel) return;
@@ -297,11 +302,11 @@ async function checkBackendHealth(p: SubtitlePanel): Promise<boolean> {
   }
 }
 
-function detectPlatform(): 'bilibili' | 'youtube' | 'unknown' {
+function detectPlatform(): 'bilibili' | 'youtube' | 'generic' {
   const host = window.location.hostname;
   if (host.includes('bilibili.com')) return 'bilibili';
   if (host.includes('youtube.com')) return 'youtube';
-  return 'unknown';
+  return 'generic';
 }
 
 async function handleExtractYouTube(language: string) {
@@ -413,6 +418,75 @@ function handleExtractWebPage() {
   });
 }
 
+async function handleExtractGeneric(language: string) {
+  const p = getPanel();
+
+  p.log('Scanning page for <video> elements...', 'step');
+  const videos = detectVideos();
+
+  if (videos.length === 0) {
+    // No video found — fall back to web page summarization
+    p.log('No <video> elements found. Falling back to page summarization...', 'info');
+    handleExtractWebPage();
+    return;
+  }
+
+  p.log(`Found ${videos.length} video element(s)`, 'info');
+  const video = pickBestVideo(videos);
+  p.log(`Selected video: ${video.videoWidth}×${video.videoHeight}, duration=${Math.round(video.duration)}s`, 'info');
+  p.log(`Source: ${video.isBlob ? 'blob URL (MediaSource)' : video.src}`, 'info');
+
+  const videoInfo = buildGenericVideoInfo(video, window.location.href);
+  currentVideoInfo = videoInfo;
+  p.setVideoInfo(videoInfo);
+  p.log(`Title: ${videoInfo.title}`, 'info');
+
+  // Try <track> element subtitles first
+  if (video.tracks.length > 0) {
+    p.log(`Found ${video.tracks.length} subtitle/caption track(s)`, 'info');
+    const items = await extractTrackSubtitles(video.tracks, language);
+    if (items && items.length > 0) {
+      p.log(`Parsed ${items.length} subtitle entries from <track> element`, 'success');
+      currentItems = items;
+      p.setSubtitles(items, 'generic_vtt');
+      return;
+    }
+    p.log('Could not parse subtitles from <track> elements', 'warn');
+  } else {
+    p.log('No <track> subtitle elements found', 'info');
+  }
+
+  // Fallback: backend transcription via yt-dlp + Whisper
+  p.log('Falling back to backend transcription (yt-dlp → Whisper)...', 'step');
+
+  const online = await checkBackendHealth(p);
+  if (!online) {
+    p.log('Backend service is offline — cannot fallback to transcription.', 'error');
+    p.log('Start the backend: ./start-server.sh', 'warn');
+    return;
+  }
+
+  // Use direct video URL if available, otherwise page URL for yt-dlp
+  const videoUrl = video.isBlob ? window.location.href : video.src;
+  if (video.isBlob) {
+    p.log('Video uses blob URL — sending page URL to yt-dlp for extraction', 'info');
+  }
+
+  const reqId = Math.random().toString(36).slice(2, 8);
+  currentReqId = reqId;
+  p.log(`[${reqId}] Requesting backend transcription...`, 'step');
+
+  const config = await getConfig();
+  await fetchTranscript(p, reqId, {
+    bvid: '',
+    video_url: videoUrl,
+    model_size: config.whisperModelSize || 'tiny',
+    cookie: '',
+    language,
+    req_id: reqId,
+  });
+}
+
 async function handleExtract(language: string) {
   const p = getPanel();
   p.show();
@@ -424,6 +498,11 @@ async function handleExtract(language: string) {
 
   if (platform === 'youtube') {
     await handleExtractYouTube(language);
+    return;
+  }
+
+  if (platform === 'generic') {
+    await handleExtractGeneric(language);
     return;
   }
 

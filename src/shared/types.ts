@@ -14,11 +14,12 @@ export interface VideoInfo {
   coverUrl?: string;
   pubdate?: number;    // Unix timestamp from Bilibili API
   desc?: string;       // Video description from Bilibili API
-  platform?: 'bilibili' | 'youtube';  // undefined means bilibili (backward compat)
+  platform?: 'bilibili' | 'youtube' | 'generic';  // undefined means bilibili (backward compat)
   youtubeVideoId?: string;             // e.g. "dQw4w9WgXcQ"
+  genericVideoUrl?: string;            // direct video src or page URL for generic sites
 }
 
-export type SubtitleSource = 'ai' | 'cc' | 'whisper' | 'bcut_asr' | 'yt_cc' | 'yt_auto';
+export type SubtitleSource = 'ai' | 'cc' | 'whisper' | 'bcut_asr' | 'yt_cc' | 'yt_auto' | 'generic_vtt';
 
 export interface SubtitleResult {
   source: SubtitleSource;
